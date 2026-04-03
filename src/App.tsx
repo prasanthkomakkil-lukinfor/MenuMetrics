@@ -58,10 +58,10 @@ function AppContent() {
       </div>
     );
   }
-
-  if (!user) {
-    return <Login />;
-  }
+if (!user) {
+  return <h1>Please wait... loading app 🚀</h1>;
+}
+  
 
   return pageMap[currentPage] || <Dashboard />;
 }
