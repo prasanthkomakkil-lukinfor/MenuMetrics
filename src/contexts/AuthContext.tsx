@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('businesses')
       .insert({
         name: businessName,
-        plan: 'starter',
+        plan: 'pro',
         trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
         email,
       })

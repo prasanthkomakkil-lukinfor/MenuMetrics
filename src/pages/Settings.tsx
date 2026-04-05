@@ -34,15 +34,18 @@ export function Settings() {
 
     setLoading(true);
     try {
-      await supabase
+      const { error } = await supabase
         .from('businesses')
         .update(formData)
         .eq('id', business.id);
+
+      if (error) throw error;
 
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
       console.error('Error updating settings:', error);
+      alert('Failed to save settings. Please try again.');
     } finally {
       setLoading(false);
     }
