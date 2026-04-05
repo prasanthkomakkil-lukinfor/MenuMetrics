@@ -9,10 +9,10 @@ export function Login() {
   const [error, setError] = useState('');
 
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    name: '',
-    businessName: '',
+    email: 'demo@menumetrics.net',
+    password: 'demo123456',
+    name: 'Demo User',
+    businessName: 'Demo Restaurant',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,6 +47,11 @@ export function Login() {
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">MenuMetrics</h1>
           <p className="text-gray-400">Restaurant & QSR Point of Sale</p>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-amber-900 font-medium mb-1">Quick Demo Access</p>
+          <p className="text-xs text-amber-700">Demo credentials are pre-filled. Click Sign Up to create your account or Sign In if you already have one.</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
