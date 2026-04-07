@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const loadUserData = async (userId: string) => {
+  const loadUserData = async (userId: string, retries = 3) => {
     try {
       const { data: staffData, error: staffError } = await supabase
         .from('staff')
@@ -65,6 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (staffError) throw staffError;
 
+      if (!staffData && retries > 0) {
+        await new Promise(r => setTimeout(r, 1000));
+        return loadUserData(userId, retries - 1);
+      }
+
       setStaff(staffData);
 
       if (staffData) {
@@ -72,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .from('businesses')
           .select('*')
           .eq('id', staffData.business_id)
-          .single();
+          .maybeSingle();
 
         if (businessError) throw businessError;
 
@@ -94,36 +99,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, name: string, businessName: string) => {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          name,
+          business_name: businessName,
+        },
+      },
     });
 
     if (authError) throw authError;
-    if (!authData.user) throw new Error('User creation failed');
-
-    const { data: businessData, error: businessError } = await supabase
-      .from('businesses')
-      .insert({
-        name: businessName,
-        plan: 'pro',
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        email,
-      })
-      .select()
-      .single();
-
-    if (businessError) throw businessError;
-
-    const { error: staffError } = await supabase.from('staff').insert({
-      business_id: businessData.id,
-      user_id: authData.user.id,
-      name,
-      role: 'owner',
-      is_active: true,
-    });
-
-    if (staffError) throw staffError;
   };
 
   const signOut = async () => {
