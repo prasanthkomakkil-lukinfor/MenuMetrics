@@ -264,6 +264,28 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['table_sections']['Row'], 'id' | 'created_at'>;
         Update: Partial<Database['public']['Tables']['table_sections']['Insert']>;
       };
+      order_items: {
+        Row: {
+          id: string;
+          order_id: string;
+          item_id: string | null;
+          combo_id: string | null;
+          item_name: string;
+          quantity: number;
+          unit_price: number;
+          total_price: number;
+          gst_percent: number;
+          is_foc: boolean;
+          foc_reason: string | null;
+          foc_approved_by: string | null;
+          kot_status: string;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['order_items']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['order_items']['Insert']>;
+      };
     };
     Views: {};
     Functions: {};
