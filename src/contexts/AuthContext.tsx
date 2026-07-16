@@ -1,10 +1,17 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
 
 type Staff = Database['public']['Tables']['staff']['Row'];
 type Business = Database['public']['Tables']['businesses']['Row'];
+
+interface PendingVerification {
+  email: string;
+  password: string;
+  name: string;
+  businessName: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -12,19 +19,26 @@ interface AuthContextType {
   staff: Staff | null;
   business: Business | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string, businessName: string) => Promise<void>;
+  pendingVerification: PendingVerification | null;
+  signIn: (email: string, password: string, remember: boolean) => Promise<{ needsVerification?: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string, businessName: string, remember: boolean) => Promise<{ needsVerification?: boolean; error?: string }>;
+  verifyOTP: (email: string, token: string) => Promise<{ error?: string }>;
+  resendOTP: (email: string) => Promise<{ error?: string }>;
+  cancelVerification: () => void;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+const REMEMBER_KEY = 'serveup_remember_email';
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingVerification, setPendingVerification] = useState<PendingVerification | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -80,7 +94,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
 
         if (businessError) throw businessError;
-
         setBusiness(businessData);
       }
     } catch (error) {
@@ -90,42 +103,93 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
+  const signIn = async (email: string, password: string, remember: boolean) => {
+    try {
+      if (remember) {
+        localStorage.setItem(REMEMBER_KEY, email);
+      } else {
+        localStorage.removeItem(REMEMBER_KEY);
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      return {};
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Sign in failed' };
+    }
   };
 
-  const signUp = async (email: string, password: string, name: string, businessName: string) => {
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-          business_name: businessName,
-        },
-      },
-    });
+  const signUp = async (email: string, password: string, name: string, businessName: string, remember: boolean) => {
+    try {
+      if (remember) {
+        localStorage.setItem(REMEMBER_KEY, email);
+      } else {
+        localStorage.removeItem(REMEMBER_KEY);
+      }
 
-    if (authError) throw authError;
+      const { error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            business_name: businessName,
+          },
+        },
+      });
+
+      if (authError) throw authError;
+
+      setPendingVerification({ email, password, name, businessName });
+      return { needsVerification: true };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Sign up failed' };
+    }
+  };
+
+  const verifyOTP = async (email: string, token: string) => {
+    try {
+      const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+      if (error) throw error;
+      setPendingVerification(null);
+      return {};
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Verification failed' };
+    }
+  };
+
+  const resendOTP = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resend({ email, type: 'signup' });
+      if (error) throw error;
+      return {};
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Failed to resend code' };
+    }
+  };
+
+  const cancelVerification = () => {
+    setPendingVerification(null);
   };
 
   const signOut = async () => {
+    localStorage.removeItem(REMEMBER_KEY);
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     session,
     staff,
     business,
     loading,
+    pendingVerification,
     signIn,
     signUp,
+    verifyOTP,
+    resendOTP,
+    cancelVerification,
     signOut,
   };
 
@@ -135,7 +199,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
+}
+
+export function getRememberedEmail(): string | null {
+  return localStorage.getItem(REMEMBER_KEY);
 }

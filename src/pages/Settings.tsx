@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Building2, CreditCard, Bell, Shield } from 'lucide-react';
+import { Save, Building2, CreditCard, Bell, Shield, Crown } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -36,7 +36,7 @@ export function Settings() {
     try {
       const { error } = await supabase
         .from('businesses')
-        .update(formData)
+        .update(formData as never)
         .eq('id', business.id);
 
       if (error) throw error;
@@ -182,32 +182,14 @@ export function Settings() {
               <h2 className="text-lg font-semibold text-gray-900">Current Plan</h2>
             </div>
 
-            {business && (
-              <div>
-                <div className="mb-4">
-                  <span className="text-sm text-gray-600">Active Plan</span>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 capitalize">
-                    {business.plan}
-                  </p>
-                </div>
-
-                {business.trial_ends_at && new Date(business.trial_ends_at) > new Date() && (
-                  <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-lg mb-4">
-                    <p className="text-sm font-semibold mb-1">Free Trial Active</p>
-                    <p className="text-xs">
-                      Expires: {new Date(business.trial_ends_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                )}
-
-                <a
-                  href="/pricing"
-                  className="block w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-center rounded-lg font-semibold transition-colors"
-                >
-                  Upgrade Plan
-                </a>
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-6 text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl mb-3">
+                <Crown className="w-6 h-6 text-white" />
               </div>
-            )}
+              <p className="text-sm text-gray-600 mb-1">Active Plan</p>
+              <p className="text-2xl font-bold text-gray-900 mb-2">Pro</p>
+              <p className="text-sm text-gray-600">All features unlocked</p>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

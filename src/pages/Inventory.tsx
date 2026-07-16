@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, Plus, CreditCard as Edit2, TrendingDown } from 'lucide-react';
+import { TriangleAlert as AlertTriangle, Plus, CreditCard as Edit2, TrendingDown } from 'lucide-react';
 import { Layout } from '../components/Layout';
-import { PlanGate } from '../components/PlanGate';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
@@ -53,7 +52,6 @@ export function Inventory() {
         </button>
       </div>
 
-      <PlanGate plan="growth" feature="Inventory Management">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <p className="text-gray-600 text-sm mb-2">Total Items</p>
@@ -135,7 +133,6 @@ export function Inventory() {
             </div>
           )}
         </div>
-      </PlanGate>
     </Layout>
   );
 }

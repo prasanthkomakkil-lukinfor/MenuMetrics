@@ -1,9 +1,6 @@
 import { ReactNode, useState } from 'react';
-import { LayoutDashboard, ShoppingBag, Users, Package, FileText, Settings, LogOut, Menu, X, UtensilsCrossed, CreditCard, BarChart as ChartBar, Gift, Bell, Calendar } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, Package, FileText, Settings, LogOut, Menu, X, UtensilsCrossed, CreditCard, ChartBar as ChartBar, Gift, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { TrialBanner } from './TrialBanner';
-import { DevToolbar } from './DevToolbar';
-import { usePlan } from '../hooks/usePlan';
 
 interface LayoutProps {
   children: ReactNode;
@@ -13,12 +10,10 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   label: string;
   href: string;
-  badge?: string;
 }
 
 export function Layout({ children }: LayoutProps) {
   const { staff, business, signOut } = useAuth();
-  const { devOverridePlan, setDevOverridePlan, currentPlan } = usePlan();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const navItems: NavItem[] = [
@@ -37,8 +32,6 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <TrialBanner />
-
       <div className="flex">
         <aside
           className={`${
@@ -74,9 +67,7 @@ export function Layout({ children }: LayoutProps) {
           {sidebarOpen && business && (
             <div className="p-4 border-b border-gray-700">
               <p className="text-sm font-semibold truncate">{business.name}</p>
-              <p className="text-xs text-gray-400 mt-1">
-                {business.plan.charAt(0).toUpperCase() + business.plan.slice(1)} Plan
-              </p>
+              <p className="text-xs text-amber-400 mt-1">Pro Plan</p>
             </div>
           )}
 
@@ -91,11 +82,6 @@ export function Layout({ children }: LayoutProps) {
                 {sidebarOpen && (
                   <span className="text-sm font-medium text-gray-300 group-hover:text-white">
                     {item.label}
-                  </span>
-                )}
-                {item.badge && sidebarOpen && (
-                  <span className="ml-auto bg-amber-500 text-xs px-2 py-0.5 rounded-full">
-                    {item.badge}
                   </span>
                 )}
               </a>
@@ -125,11 +111,6 @@ export function Layout({ children }: LayoutProps) {
           <div className="p-6">{children}</div>
         </main>
       </div>
-
-      <DevToolbar
-        currentPlan={devOverridePlan || currentPlan}
-        onPlanChange={setDevOverridePlan}
-      />
     </div>
   );
 }

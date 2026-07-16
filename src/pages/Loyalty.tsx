@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Gift, Zap, Users, TrendingUp } from 'lucide-react';
 import { Layout } from '../components/Layout';
-import { PlanGate } from '../components/PlanGate';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
@@ -49,8 +48,7 @@ export function Loyalty() {
         <p className="text-gray-600">Manage customer rewards and loyalty tiers</p>
       </div>
 
-      <PlanGate plan="pro" feature="Loyalty Program">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -173,7 +171,6 @@ export function Loyalty() {
             Save Settings
           </button>
         </div>
-      </PlanGate>
     </Layout>
   );
 }

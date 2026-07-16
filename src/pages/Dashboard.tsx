@@ -1,14 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  TrendingUp,
-  ShoppingCart,
-  DollarSign,
-  Users,
-  AlertCircle,
-  Sparkles,
-} from 'lucide-react';
+import { TrendingUp, ShoppingCart, DollarSign, Users, CircleAlert as AlertCircle, Sparkles } from 'lucide-react';
 import { Layout } from '../components/Layout';
-import { PlanGate } from '../components/PlanGate';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -131,8 +123,7 @@ export function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <PlanGate plan="growth" feature="Sales by Channel">
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Sales by Channel</h3>
             <div className="space-y-3">
               {[
@@ -155,7 +146,6 @@ export function Dashboard() {
               ))}
             </div>
           </div>
-        </PlanGate>
 
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
@@ -192,8 +182,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <PlanGate plan="pro" feature="AI Business Insights">
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+      <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center gap-3 mb-4">
             <Sparkles className="w-6 h-6" />
             <h3 className="text-lg font-semibold">AI Business Insights</h3>
@@ -219,7 +208,6 @@ export function Dashboard() {
             ))}
           </div>
         </div>
-      </PlanGate>
     </Layout>
   );
 }

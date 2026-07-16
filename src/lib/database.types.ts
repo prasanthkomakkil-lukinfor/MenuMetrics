@@ -22,7 +22,7 @@ export interface Database {
         Row: {
           id: string;
           name: string;
-          plan: Plan;
+          plan: string;
           trial_ends_at: string | null;
           logo_url: string | null;
           theme_color: string | null;
@@ -42,9 +42,10 @@ export interface Database {
           business_id: string;
           user_id: string;
           name: string;
-          role: Role;
+          role: string;
           pin: string | null;
           is_active: boolean;
+          permissions: string[] | null;
           created_at: string;
         };
         Insert: Omit<Database['public']['Tables']['staff']['Row'], 'id' | 'created_at'>;
@@ -97,7 +98,7 @@ export interface Database {
           section_id: string | null;
           table_number: string;
           capacity: number;
-          status: TableStatus;
+          status: string;
           qr_code: string | null;
           is_active: boolean;
           created_at: string;
@@ -109,7 +110,7 @@ export interface Database {
         Row: {
           id: string;
           business_id: string;
-          order_type: OrderType;
+          order_type: string;
           table_id: string | null;
           token_number: string | null;
           customer_id: string | null;
@@ -117,7 +118,7 @@ export interface Database {
           customer_mobile: string | null;
           staff_id: string | null;
           guest_count: number;
-          status: OrderStatus;
+          status: string;
           subtotal: number;
           discount_amount: number;
           discount_percent: number;
@@ -142,7 +143,7 @@ export interface Database {
           sgst_amount: number;
           igst_amount: number;
           total_amount: number;
-          payment_status: 'pending' | 'partial' | 'paid';
+          payment_status: string;
           paid_amount: number;
           customer_gstin: string | null;
           generated_by: string | null;
@@ -150,6 +151,118 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['bills']['Row'], 'id' | 'created_at'>;
         Update: Partial<Database['public']['Tables']['bills']['Insert']>;
+      };
+      customers: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: string | null;
+          mobile: string | null;
+          email: string | null;
+          birthday: string | null;
+          anniversary: string | null;
+          total_visits: number;
+          total_spent: number;
+          loyalty_points: number;
+          loyalty_tier: string;
+          last_visit_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['customers']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['customers']['Insert']>;
+      };
+      kots: {
+        Row: {
+          id: string;
+          business_id: string;
+          order_id: string;
+          kot_number: string;
+          kot_type: string;
+          status: string;
+          created_by: string | null;
+          created_at: string;
+          started_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: Omit<Database['public']['Tables']['kots']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['kots']['Insert']>;
+      };
+      reservations: {
+        Row: {
+          id: string;
+          business_id: string;
+          customer_id: string | null;
+          customer_name: string;
+          customer_mobile: string;
+          email: string | null;
+          party_size: number;
+          reservation_date: string;
+          reservation_time: string;
+          table_id: string | null;
+          section_id: string | null;
+          special_requests: string | null;
+          status: string;
+          auto_release_minutes: number;
+          confirmation_sent: boolean;
+          reminder_sent: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['reservations']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['reservations']['Insert']>;
+      };
+      advance_orders: {
+        Row: {
+          id: string;
+          business_id: string;
+          customer_id: string | null;
+          customer_name: string | null;
+          customer_mobile: string | null;
+          order_date: string;
+          order_time: string;
+          order_type: string;
+          deposit_amount: number;
+          total_amount: number;
+          special_instructions: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          delivery_address: string | null;
+          customer_email: string | null;
+          delivery_instructions: string | null;
+        };
+        Insert: Omit<Database['public']['Tables']['advance_orders']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['advance_orders']['Insert']>;
+      };
+      payments: {
+        Row: {
+          id: string;
+          business_id: string;
+          bill_id: string;
+          payment_mode: string;
+          amount: number;
+          reference_number: string | null;
+          card_last_4: string | null;
+          upi_ref: string | null;
+          approval_code: string | null;
+          processed_by: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['payments']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['payments']['Insert']>;
+      };
+      table_sections: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: string;
+          display_order: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['table_sections']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['table_sections']['Insert']>;
       };
     };
     Views: {};

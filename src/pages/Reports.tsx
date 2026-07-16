@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Download } from 'lucide-react';
+import { ChartBar as BarChart3, TrendingUp, Download } from 'lucide-react';
 import { Layout } from '../components/Layout';
-import { PlanGate } from '../components/PlanGate';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
@@ -135,8 +134,7 @@ export function Reports() {
           </div>
         </div>
 
-        <PlanGate plan="growth" feature="Hourly Sales Heatmap">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-amber-500" />
               <h2 className="text-lg font-semibold text-gray-900">Hourly Sales</h2>
@@ -163,7 +161,6 @@ export function Reports() {
               ))}
             </div>
           </div>
-        </PlanGate>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

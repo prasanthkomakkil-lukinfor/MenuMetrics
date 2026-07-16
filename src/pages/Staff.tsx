@@ -57,7 +57,7 @@ export function Staff() {
     name: '',
     email: '',
     password: '',
-    role: 'waiter' as const,
+    role: 'waiter' as string,
     permissions: [] as string[],
   });
 
@@ -102,7 +102,7 @@ export function Staff() {
             name: formData.name,
             role: formData.role,
             permissions: formData.permissions,
-          })
+          } as never)
           .eq('id', editingId);
       } else {
         const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -124,7 +124,7 @@ export function Staff() {
           role: formData.role,
           permissions: permissions,
           is_active: true,
-        });
+        } as never);
       }
 
       setFormData({ name: '', email: '', password: '', role: 'waiter', permissions: [] });
@@ -145,7 +145,7 @@ export function Staff() {
     try {
       await supabase
         .from('staff')
-        .update({ is_active: false })
+        .update({ is_active: false } as never)
         .eq('id', id);
       loadStaff();
     } catch (error) {
@@ -201,7 +201,7 @@ export function Staff() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {staffMembers.map((member) => {
-            const RoleIcon = roleIcons[member.role];
+            const RoleIcon = (roleIcons as Record<string, typeof roleIcons.owner>)[member.role] || roleIcons.owner;
             const permissions = Array.isArray(member.permissions) ? member.permissions : [];
 
             return (
@@ -218,7 +218,7 @@ export function Staff() {
                       <h3 className="font-semibold text-gray-900">{member.name}</h3>
                       <span
                         className={`text-xs px-3 py-1 rounded-full font-semibold inline-block mt-1 ${
-                          roleColors[member.role]
+                          (roleColors as Record<string, string>)[member.role] || roleColors.waiter
                         }`}
                       >
                         {member.role.charAt(0).toUpperCase() + member.role.slice(1)}

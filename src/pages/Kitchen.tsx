@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Clock, CircleCheck as CheckCircle2, CircleAlert as AlertCircle } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -153,7 +153,7 @@ function KOTCard({ kot, timeColor, timeDisplay, onStatusChange, isReady }: KOTCa
   const updateStatus = async (newStatus: string) => {
     setUpdating(true);
     try {
-      await supabase.from('kots').update({ status: newStatus }).eq('id', kot.id);
+      await supabase.from('kots').update({ status: newStatus } as never).eq('id', kot.id);
       onStatusChange();
     } catch (error) {
       console.error('Error updating KOT:', error);

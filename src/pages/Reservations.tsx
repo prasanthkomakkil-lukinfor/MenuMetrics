@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Plus, Clock, Users, Phone, CheckCircle, MapPin, Mail, Truck, Package } from 'lucide-react';
+import { Calendar, Plus, Clock, Users, Phone, CircleCheck as CheckCircle, MapPin, Mail, Truck, Package } from 'lucide-react';
 import { Layout } from '../components/Layout';
-import { PlanGate } from '../components/PlanGate';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
@@ -79,7 +78,7 @@ export function Reservations() {
           party_size: 2,
           status: 'pending',
           special_requests: formData.special_instructions,
-        });
+        } as never);
       } else {
         await supabase.from('advance_orders').insert({
           business_id: business.id,
@@ -93,7 +92,7 @@ export function Reservations() {
           delivery_instructions: activeTab === 'delivery' ? formData.delivery_instructions : null,
           special_instructions: formData.special_instructions || null,
           status: 'pending',
-        });
+        } as never);
       }
 
       setShowAddModal(false);
@@ -128,7 +127,6 @@ export function Reservations() {
 
   return (
     <Layout>
-      <PlanGate plan="pro" feature="Advance Orders & Reservations">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-1">Orders & Reservations</h1>
@@ -361,7 +359,6 @@ export function Reservations() {
             </div>
           </div>
         )}
-      </PlanGate>
     </Layout>
   );
 }
@@ -377,7 +374,7 @@ function ReservationCard({ reservation, statusColors, onUpdate }: ReservationCar
     try {
       await supabase
         .from('reservations')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .update({ status: newStatus, updated_at: new Date().toISOString() } as never)
         .eq('id', reservation.id);
       onUpdate();
     } catch (error) {
@@ -457,7 +454,7 @@ function AdvanceOrderCard({ order, statusColors, onUpdate, type }: AdvanceOrderC
     try {
       await supabase
         .from('advance_orders')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .update({ status: newStatus, updated_at: new Date().toISOString() } as never)
         .eq('id', order.id);
       onUpdate();
     } catch (error) {
