@@ -244,6 +244,7 @@ export interface Database {
           amount: number;
           reference_number: string | null;
           card_last_4: string | null;
+          card_type: string | null;
           upi_ref: string | null;
           approval_code: string | null;
           processed_by: string | null;

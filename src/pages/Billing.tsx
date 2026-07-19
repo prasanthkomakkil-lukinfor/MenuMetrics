@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Printer, Share2, CircleAlert as AlertCircle, DollarSign, CircleCheck as CheckCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Printer, Share2, DollarSign, CheckCircle, Tag, CreditCard, X, Receipt } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -7,25 +7,41 @@ import type { Database } from '../lib/database.types';
 
 type Bill = Database['public']['Tables']['bills']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];
+type OrderItem = Database['public']['Tables']['order_items']['Row'];
+type Table = Database['public']['Tables']['tables']['Row'];
+type Payment = Database['public']['Tables']['payments']['Row'];
+
+const cardTypes = [
+  { id: 'visa', label: 'Visa' },
+  { id: 'mastercard', label: 'Mastercard' },
+  { id: 'amex', label: 'Amex' },
+  { id: 'rupay', label: 'RuPay' },
+  { id: 'diners', label: 'Diners' },
+  { id: 'other', label: 'Other' },
+];
 
 export function Billing() {
   const { business, staff } = useAuth();
   const [bills, setBills] = useState<(Bill & { order?: Order })[]>([]);
-  const [selectedBill, setSelectedBill] = useState<string | null>(null);
+  const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'partial' | 'paid'>('all');
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'card' | 'upi'>('cash');
+  const [cardType, setCardType] = useState<string>('visa');
+  const [cardLast4, setCardLast4] = useState('');
+  const [upiRef, setUpiRef] = useState('');
   const [paidAmount, setPaidAmount] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [tableInfo, setTableInfo] = useState<Table | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [discountAmount, setDiscountAmount] = useState('');
+  const [discountPercent, setDiscountPercent] = useState('');
+  const [savingDiscount, setSavingDiscount] = useState(false);
 
-  useEffect(() => {
-    if (business) {
-      loadBills();
-    }
-  }, [business, filterStatus]);
-
-  const loadBills = async () => {
+  const loadBills = useCallback(async () => {
     if (!business) return;
     try {
       let query = supabase
@@ -44,15 +60,56 @@ export function Billing() {
     } finally {
       setLoading(false);
     }
+  }, [business, filterStatus]);
+
+  useEffect(() => {
+    if (business) loadBills();
+  }, [business, loadBills]);
+
+  const loadBillDetails = async (bill: Bill & { order?: Order }) => {
+    if (!bill.order) return;
+    try {
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('*')
+        .eq('order_id', bill.order.id)
+        .order('created_at');
+      setOrderItems(items || []);
+
+      if (bill.order.table_id) {
+        const { data: table } = await supabase
+          .from('tables')
+          .select('*')
+          .eq('id', bill.order.table_id)
+          .maybeSingle();
+        setTableInfo(table);
+      } else {
+        setTableInfo(null);
+      }
+
+      const { data: pays } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('bill_id', bill.id)
+        .order('created_at');
+      setPayments(pays || []);
+    } catch (error) {
+      console.error('Error loading bill details:', error);
+    }
   };
 
-  const selectedBillData = bills.find((b) => b.id === selectedBill);
-  const pendingAmount = selectedBillData
-    ? Number(selectedBillData.total_amount) - Number(selectedBillData.paid_amount)
+  const selectedBill = bills.find((b) => b.id === selectedBillId);
+  const pendingAmount = selectedBill
+    ? Number(selectedBill.total_amount) - Number(selectedBill.paid_amount)
     : 0;
 
+  const handleSelectBill = (bill: Bill & { order?: Order }) => {
+    setSelectedBillId(bill.id);
+    loadBillDetails(bill);
+  };
+
   const collectPayment = async () => {
-    if (!selectedBillData || !business || !staff) return;
+    if (!selectedBill || !business || !staff) return;
     const amount = parseFloat(paidAmount);
     if (!amount || amount <= 0) {
       alert('Enter a valid amount');
@@ -61,49 +118,106 @@ export function Billing() {
 
     setProcessing(true);
     try {
-      // Insert payment record
+      const paymentPayload: Record<string, unknown> = {
+        business_id: business.id,
+        bill_id: selectedBill.id,
+        payment_mode: paymentMode,
+        amount: amount,
+        processed_by: staff.id,
+      };
+
+      if (paymentMode === 'card') {
+        paymentPayload.card_type = cardType;
+        paymentPayload.card_last_4 = cardLast4 || null;
+      } else if (paymentMode === 'upi') {
+        paymentPayload.upi_ref = upiRef || null;
+      }
+
       const { error: payError } = await supabase
         .from('payments')
-        .insert({
-          business_id: business.id,
-          bill_id: selectedBillData.id,
-          payment_mode: paymentMode,
-          amount: amount,
-          processed_by: staff.id,
-        } as never);
+        .insert(paymentPayload as never);
 
       if (payError) throw payError;
 
-      const newPaidAmount = Number(selectedBillData.paid_amount) + amount;
-      const newStatus = newPaidAmount >= Number(selectedBillData.total_amount) ? 'paid' : 'partial';
+      const newPaidAmount = Number(selectedBill.paid_amount) + amount;
+      const newStatus = newPaidAmount >= Number(selectedBill.total_amount) ? 'paid' : 'partial';
 
-      // Update bill
-      const { error: billError } = await supabase
+      await supabase
         .from('bills')
         .update({
           paid_amount: newPaidAmount,
           payment_status: newStatus,
         } as never)
-        .eq('id', selectedBillData.id);
+        .eq('id', selectedBill.id);
 
-      if (billError) throw billError;
-
-      // If fully paid, free the table
-      if (newStatus === 'paid' && selectedBillData.order?.table_id) {
+      if (newStatus === 'paid' && selectedBill.order?.table_id) {
         await supabase
           .from('tables')
           .update({ status: 'free' } as never)
-          .eq('id', selectedBillData.order.table_id);
+          .eq('id', selectedBill.order.table_id);
       }
 
       setShowPaymentModal(false);
       setPaidAmount('');
+      setCardLast4('');
+      setUpiRef('');
       loadBills();
     } catch (error) {
       console.error('Error collecting payment:', error);
       alert('Failed to process payment');
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const applyDiscount = async () => {
+    if (!selectedBill || !business) return;
+    setSavingDiscount(true);
+    try {
+      const order = selectedBill.order;
+      if (!order) return;
+
+      const subtotal = Number(order.subtotal);
+      let discAmount = 0;
+      let discPercent = 0;
+
+      if (discountAmount) {
+        discAmount = parseFloat(discountAmount);
+      } else if (discountPercent) {
+        discPercent = parseFloat(discountPercent);
+        discAmount = (subtotal * discPercent) / 100;
+      }
+
+      const newTotal = subtotal - discAmount + Number(order.tax_amount);
+      const cgst = Number(order.tax_amount) / 2;
+      const sgst = Number(order.tax_amount) / 2;
+
+      await supabase
+        .from('bills')
+        .update({
+          discount_amount: discAmount,
+          total_amount: newTotal,
+        } as never)
+        .eq('id', selectedBill.id);
+
+      await supabase
+        .from('orders')
+        .update({
+          discount_amount: discAmount,
+          discount_percent: discPercent,
+          total_amount: newTotal,
+        } as never)
+        .eq('id', order.id);
+
+      setShowDiscountModal(false);
+      setDiscountAmount('');
+      setDiscountPercent('');
+      loadBills();
+    } catch (error) {
+      console.error('Error applying discount:', error);
+      alert('Failed to apply discount');
+    } finally {
+      setSavingDiscount(false);
     }
   };
 
@@ -115,19 +229,15 @@ export function Billing() {
     <Layout>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Billing & Payments</h1>
-        <p className="text-gray-600">Manage bills and payment collection</p>
+        <p className="text-gray-600">Manage bills, discounts, and payment collection</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Bills List */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-            <div className="flex items-center gap-4 mb-4">
-              <input
-                type="text"
-                placeholder="Search bill number..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
-              />
-              <div className="flex gap-2">
+            <div className="flex flex-col md:flex-row gap-3 mb-4">
+              <div className="flex gap-2 flex-wrap">
                 {(['all', 'pending', 'partial', 'paid'] as const).map((status) => (
                   <button
                     key={status}
@@ -150,22 +260,22 @@ export function Billing() {
               </div>
             ) : bills.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-5xl mb-3">🧾</div>
+                <Receipt className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No bills yet. Generate a bill from the Orders page.</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
                 {bills.map((bill) => (
                   <button
                     key={bill.id}
-                    onClick={() => setSelectedBill(bill.id)}
+                    onClick={() => handleSelectBill(bill)}
                     className={`w-full p-4 rounded-lg text-left transition-all ${
-                      selectedBill === bill.id
+                      selectedBillId === bill.id
                         ? 'bg-amber-50 border-2 border-amber-500'
                         : 'bg-gray-50 border border-gray-200 hover:border-amber-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-gray-900">Bill #{bill.bill_number}</span>
                       <span
                         className={`text-xs px-3 py-1 rounded-full font-semibold ${
@@ -180,8 +290,14 @@ export function Billing() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm text-gray-600">
-                      <span>₹{bill.total_amount}</span>
-                      <span>{new Date(bill.created_at).toLocaleDateString()}</span>
+                      <span>
+                        {bill.order?.order_type === 'dine_in' ? 'Dine-In' : bill.order?.order_type === 'takeaway' ? 'Takeaway' : 'Order'}
+                        {bill.order?.customer_name && ` · ${bill.order.customer_name}`}
+                      </span>
+                      <span className="font-bold text-gray-900">₹{bill.total_amount}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {new Date(bill.created_at).toLocaleString()}
                     </div>
                   </button>
                 ))}
@@ -190,74 +306,158 @@ export function Billing() {
           </div>
         </div>
 
-        {selectedBillData && (
+        {/* Bill Preview */}
+        {selectedBill ? (
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Bill Preview</h2>
-
-              <div className="border-b border-gray-200 pb-4 mb-4">
-                <p className="text-2xl font-bold text-gray-900 mb-1">
-                  ₹{selectedBillData.total_amount}
-                </p>
-                <p className="text-sm text-gray-600">Bill #{selectedBillData.bill_number}</p>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Bill Preview</h2>
+                <span
+                  className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                    selectedBill.payment_status === 'paid'
+                      ? 'bg-green-100 text-green-700'
+                      : selectedBill.payment_status === 'partial'
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {selectedBill.payment_status.charAt(0).toUpperCase() + selectedBill.payment_status.slice(1)}
+                </span>
               </div>
 
-              <div className="space-y-2 text-sm mb-4">
+              {/* Bill Header */}
+              <div className="border-b border-gray-200 pb-3 mb-3">
+                <p className="text-sm font-semibold text-gray-900">{business?.name}</p>
+                <p className="text-sm text-gray-600">Bill #{selectedBill.bill_number}</p>
+                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                  <span>{new Date(selectedBill.created_at).toLocaleString()}</span>
+                </div>
+                {tableInfo && (
+                  <div className="mt-2 inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-semibold">
+                    Table {tableInfo.table_number} · {tableInfo.capacity} seats
+                  </div>
+                )}
+                {selectedBill.order?.order_type === 'takeaway' && (
+                  <div className="mt-2 inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
+                    Takeaway Order
+                  </div>
+                )}
+                {selectedBill.order?.customer_name && (
+                  <p className="text-xs text-gray-600 mt-1">Customer: {selectedBill.order.customer_name}</p>
+                )}
+                {selectedBill.order?.customer_mobile && (
+                  <p className="text-xs text-gray-600">Mobile: {selectedBill.order.customer_mobile}</p>
+                )}
+              </div>
+
+              {/* Order Items */}
+              {orderItems.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Items</p>
+                  <div className="space-y-1">
+                    {orderItems.map((item) => (
+                      <div key={item.id} className="flex justify-between text-sm py-1 border-b border-gray-50">
+                        <div className="flex-1">
+                          <span className="text-gray-900 font-medium">{item.quantity}× {item.item_name}</span>
+                          <span className="text-xs text-gray-400 ml-2">₹{item.unit_price} each</span>
+                        </div>
+                        <span className="font-semibold text-gray-900">₹{item.total_price}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Bill Summary */}
+              <div className="space-y-1.5 text-sm border-t border-gray-200 pt-3 mb-4">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">₹{selectedBillData.subtotal}</span>
+                  <span className="font-medium">₹{selectedBill.subtotal}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Discount</span>
-                  <span className="font-medium">-₹{selectedBillData.discount_amount}</span>
+                  <span className="font-medium text-red-600">-₹{selectedBill.discount_amount}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">CGST + SGST</span>
-                  <span className="font-medium">
-                    ₹{Number(selectedBillData.cgst_amount) + Number(selectedBillData.sgst_amount)}
-                  </span>
+                  <span className="text-gray-600">CGST</span>
+                  <span className="font-medium">₹{selectedBill.cgst_amount}</span>
                 </div>
-                <div className="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-100">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">SGST</span>
+                  <span className="font-medium">₹{selectedBill.sgst_amount}</span>
+                </div>
+                <div className="flex justify-between font-bold text-gray-900 text-base pt-1.5 border-t border-gray-100">
                   <span>Total</span>
-                  <span>₹{selectedBillData.total_amount}</span>
+                  <span>₹{selectedBill.total_amount}</span>
                 </div>
                 <div className="flex justify-between text-green-600">
                   <span>Paid</span>
-                  <span>₹{selectedBillData.paid_amount}</span>
+                  <span>₹{selectedBill.paid_amount}</span>
                 </div>
-                {selectedBillData.payment_status !== 'paid' && (
-                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg mt-4">
+                {selectedBill.payment_status !== 'paid' && (
+                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg mt-2">
                     <p className="text-xs font-semibold text-yellow-800 mb-1">Pending Amount</p>
                     <p className="text-xl font-bold text-yellow-900">₹{pendingAmount}</p>
                   </div>
                 )}
               </div>
 
+              {/* Payments History */}
+              {payments.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Payment History</p>
+                  <div className="space-y-1">
+                    {payments.map((pay) => (
+                      <div key={pay.id} className="flex justify-between text-xs bg-gray-50 p-2 rounded">
+                        <span className="text-gray-700">
+                          {pay.payment_mode.toUpperCase()}
+                          {pay.payment_mode === 'card' && pay.card_type && ` · ${pay.card_type}`}
+                          {pay.payment_mode === 'card' && pay.card_last_4 && ` · ****${pay.card_last_4}`}
+                          {pay.payment_mode === 'upi' && pay.upi_ref && ` · ${pay.upi_ref}`}
+                        </span>
+                        <span className="font-semibold text-gray-900">₹{pay.amount}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
               <div className="space-y-2">
+                {selectedBill.payment_status !== 'paid' && (
+                  <>
+                    <button
+                      onClick={() => setShowDiscountModal(true)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-colors"
+                    >
+                      <Tag className="w-4 h-4" />
+                      Apply Discount
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPaidAmount(String(pendingAmount));
+                        setPaymentMode('cash');
+                        setShowPaymentModal(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors"
+                    >
+                      <DollarSign className="w-4 h-4" />
+                      Collect Payment
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={printBill}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors"
                 >
                   <Printer className="w-4 h-4" />
-                  Print
+                  Print Bill
                 </button>
                 <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold transition-colors">
                   <Share2 className="w-4 h-4" />
-                  WhatsApp
+                  Send WhatsApp
                 </button>
-                {selectedBillData.payment_status !== 'paid' && (
-                  <button
-                    onClick={() => {
-                      setPaidAmount(String(pendingAmount));
-                      setShowPaymentModal(true);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors"
-                  >
-                    <DollarSign className="w-4 h-4" />
-                    Collect Payment
-                  </button>
-                )}
-                {selectedBillData.payment_status === 'paid' && (
+                {selectedBill.payment_status === 'paid' && (
                   <div className="flex items-center justify-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg font-semibold">
                     <CheckCircle className="w-4 h-4" />
                     Fully Paid
@@ -266,28 +466,35 @@ export function Billing() {
               </div>
             </div>
           </div>
+        ) : (
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center sticky top-4">
+              <Receipt className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">Select a bill to view details</p>
+            </div>
+          </div>
         )}
       </div>
 
       {/* Payment Modal */}
-      {showPaymentModal && selectedBillData && (
+      {showPaymentModal && selectedBill && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">Collect Payment</h2>
               <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
-                <Share2 className="w-5 h-5 rotate-45" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-600">Bill Total</span>
-                <span className="font-semibold">₹{selectedBillData.total_amount}</span>
+                <span className="font-semibold">₹{selectedBill.total_amount}</span>
               </div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-600">Already Paid</span>
-                <span className="font-semibold text-green-600">₹{selectedBillData.paid_amount}</span>
+                <span className="font-semibold text-green-600">₹{selectedBill.paid_amount}</span>
               </div>
               <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200">
                 <span>Pending</span>
@@ -303,17 +510,66 @@ export function Billing() {
                     <button
                       key={mode}
                       onClick={() => setPaymentMode(mode)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      className={`px-4 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-1.5 ${
                         paymentMode === mode
                           ? 'bg-amber-500 text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
+                      {mode === 'cash' && <DollarSign className="w-4 h-4" />}
+                      {mode === 'card' && <CreditCard className="w-4 h-4" />}
                       {mode.toUpperCase()}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {paymentMode === 'card' && (
+                <div className="space-y-3 p-3 bg-blue-50 rounded-lg">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Card Type</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {cardTypes.map((ct) => (
+                        <button
+                          key={ct.id}
+                          onClick={() => setCardType(ct.id)}
+                          className={`px-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            cardType === ct.id
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {ct.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Card Last 4 Digits</label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={cardLast4}
+                      onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, ''))}
+                      placeholder="1234"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {paymentMode === 'upi' && (
+                <div className="p-3 bg-purple-50 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">UPI Reference (optional)</label>
+                  <input
+                    type="text"
+                    value={upiRef}
+                    onChange={(e) => setUpiRef(e.target.value)}
+                    placeholder="UPI transaction ID"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label>
@@ -325,9 +581,23 @@ export function Billing() {
                   onChange={(e) => setPaidAmount(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
                 />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => setPaidAmount(String(pendingAmount))}
+                    className="flex-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                  >
+                    Full (₹{pendingAmount})
+                  </button>
+                  <button
+                    onClick={() => setPaidAmount(String(Math.ceil(pendingAmount / 2)))}
+                    className="flex-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                  >
+                    Half
+                  </button>
+                </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowPaymentModal(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
@@ -340,6 +610,101 @@ export function Billing() {
                   className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
                 >
                   {processing ? 'Processing...' : 'Collect'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discount Modal */}
+      {showDiscountModal && selectedBill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Apply Discount</h2>
+              <button onClick={() => setShowDiscountModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="font-semibold">₹{selectedBill.subtotal}</span>
+              </div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">Current Discount</span>
+                <span className="font-semibold text-red-600">₹{selectedBill.discount_amount}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Tax</span>
+                <span className="font-semibold">₹{selectedBill.cgst_amount + selectedBill.sgst_amount}</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Discount Amount (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={discountAmount}
+                  onChange={(e) => {
+                    setDiscountAmount(e.target.value);
+                    setDiscountPercent('');
+                  }}
+                  placeholder="0.00"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+              <div className="text-center text-xs text-gray-400">— OR —</div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Discount Percent (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  value={discountPercent}
+                  onChange={(e) => {
+                    setDiscountPercent(e.target.value);
+                    setDiscountAmount('');
+                  }}
+                  placeholder="0"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                {[5, 10, 15, 20].map((pct) => (
+                  <button
+                    key={pct}
+                    onClick={() => {
+                      setDiscountPercent(String(pct));
+                      setDiscountAmount('');
+                    }}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-amber-100 text-gray-700 rounded-lg text-sm font-medium"
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowDiscountModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={applyDiscount}
+                  disabled={savingDiscount || (!discountAmount && !discountPercent)}
+                  className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                >
+                  {savingDiscount ? 'Applying...' : 'Apply Discount'}
                 </button>
               </div>
             </div>
