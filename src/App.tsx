@@ -9,6 +9,7 @@ import { Reports } from './pages/Reports';
 import { Customers } from './pages/Customers';
 import { Staff } from './pages/Staff';
 import { Inventory } from './pages/Inventory';
+import { Purchasing } from './pages/Purchasing';
 import { Loyalty } from './pages/Loyalty';
 import { Pricing } from './pages/Pricing';
 import { Settings } from './pages/Settings';
@@ -42,6 +43,7 @@ function AppContent() {
     customers: <Customers />,
     staff: <Staff />,
     inventory: <Inventory />,
+    purchasing: <Purchasing />,
     loyalty: <Loyalty />,
     reservations: <Reservations />,
     pricing: <Pricing />,

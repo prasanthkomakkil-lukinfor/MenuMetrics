@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { LayoutDashboard, ShoppingBag, Users, Package, FileText, Settings, LogOut, Menu, X, UtensilsCrossed, CreditCard, ChartBar as ChartBar, Gift, Calendar } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, Package, FileText, Settings, LogOut, Menu, X, UtensilsCrossed, CreditCard, ChartBar as ChartBar, Gift, Calendar, Truck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
@@ -21,6 +21,7 @@ export function Layout({ children }: LayoutProps) {
     { icon: UtensilsCrossed, label: 'Orders', href: '/orders' },
     { icon: ShoppingBag, label: 'Menu', href: '/menu' },
     { icon: Package, label: 'Inventory', href: '/inventory' },
+    { icon: Truck, label: 'Purchasing', href: '/purchasing' },
     { icon: Users, label: 'Customers', href: '/customers' },
     { icon: Calendar, label: 'Reservations', href: '/reservations' },
     { icon: CreditCard, label: 'Billing', href: '/billing' },

@@ -11,7 +11,8 @@ type AttendanceRecord = {
   staff_id: string;
   date: string;
   clock_in: string | null;
-  clock_out: string | null;
+  check_in: string | null;
+  check_out: string | null;
   status: string;
   staff: { name: string; role: string } | null;
 };
@@ -112,7 +113,7 @@ export function Staff() {
         .select('*, staff:staff(name, role)')
         .eq('business_id', business.id)
         .eq('date', today)
-        .order('created_at', { ascending: false });
+        .order('check_in', { ascending: false });
       setAttendance((data as unknown as AttendanceRecord[]) || []);
     } catch (error) {
       console.error('Error loading attendance:', error);
@@ -128,7 +129,7 @@ export function Staff() {
         business_id: business.id,
         staff_id: staffId,
         date: today,
-        clock_in: now,
+        check_in: now,
         status: 'present',
       } as never);
       loadAttendance();
@@ -140,7 +141,7 @@ export function Staff() {
   const clockOutStaff = async (recordId: string) => {
     const now = new Date().toISOString();
     try {
-      await supabase.from('staff_attendance').update({ clock_out: now } as never).eq('id', recordId);
+      await supabase.from('staff_attendance').update({ check_out: now } as never).eq('id', recordId);
       loadAttendance();
     } catch (error) {
       console.error('Error clocking out:', error);
@@ -284,8 +285,8 @@ export function Staff() {
           <div className="space-y-3">
             {staffMembers.map((member) => {
               const record = attendance.find((a) => a.staff_id === member.id);
-              const clockIn = record?.clock_in ? new Date(record.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
-              const clockOut = record?.clock_out ? new Date(record.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+              const clockIn = record?.check_in ? new Date(record.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+              const clockOut = record?.check_out ? new Date(record.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
               return (
                 <div key={member.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50">
                   <div className="flex items-center gap-3">
