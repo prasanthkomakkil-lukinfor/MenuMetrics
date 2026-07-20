@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
 
 type Bill = Database['public']['Tables']['bills']['Row'];
+type OrderItem = Database['public']['Tables']['order_items']['Row'] & { item?: { name: string | null } };
 
 type BillWithOrder = Bill & { order?: { order_type: string; customer_name: string | null; table_id: string | null } };
 
@@ -18,6 +19,7 @@ export function Reports() {
   const [customEnd, setCustomEnd] = useState('');
   const [customStartTime, setCustomStartTime] = useState('00:00');
   const [customEndTime, setCustomEndTime] = useState('23:59');
+  const [topItems, setTopItems] = useState<{ name: string; qty: number; revenue: number }[]>([]);
 
   useEffect(() => {
     if (business) {
@@ -67,6 +69,32 @@ export function Reports() {
       const { data } = await query.order('created_at', { ascending: false });
 
       setBills((data as BillWithOrder[]) || []);
+
+      // Load order items for top-selling analysis
+      if (data && data.length > 0) {
+        const orderIds = data
+          .map((b) => (b as { order_id?: string }).order_id)
+          .filter(Boolean) as string[];
+        if (orderIds.length > 0) {
+          const { data: items } = await supabase
+            .from('order_items')
+            .select('*, item:items(name)')
+            .in('order_id', orderIds);
+          const itemMap = new Map<string, { name: string; qty: number; revenue: number }>();
+          (items as OrderItem[] || []).forEach((oi) => {
+            const name = oi.item?.name || 'Unknown Item';
+            const existing = itemMap.get(name) || { name, qty: 0, revenue: 0 };
+            existing.qty += Number(oi.quantity);
+            existing.revenue += Number(oi.total_price);
+            itemMap.set(name, existing);
+          });
+          setTopItems(Array.from(itemMap.values()).sort((a, b) => b.qty - a.qty).slice(0, 10));
+        } else {
+          setTopItems([]);
+        }
+      } else {
+        setTopItems([]);
+      }
     } catch (error) {
       console.error('Error loading reports:', error);
     } finally {
@@ -262,6 +290,40 @@ export function Reports() {
             {totalRevenue > 0 ? ((totalDiscount / totalRevenue) * 100).toFixed(1) : 0}% of revenue
           </p>
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-5 h-5 text-amber-500" />
+          <h2 className="text-lg font-semibold text-gray-900">Top 10 Best-Selling Items</h2>
+        </div>
+        {topItems.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-8">No data for this period</p>
+        ) : (
+          <div className="space-y-2">
+            {topItems.map((item, idx) => (
+              <div key={item.name} className="flex items-center gap-3">
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                  idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-gray-200 text-gray-700' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {idx + 1}
+                </span>
+                <div className="flex-1">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-700 font-medium">{item.name}</span>
+                    <span className="font-semibold">{item.qty} sold · ₹{item.revenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full transition-all"
+                      style={{ width: `${(item.qty / topItems[0].qty) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

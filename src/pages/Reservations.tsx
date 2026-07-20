@@ -7,6 +7,7 @@ import type { Database } from '../lib/database.types';
 
 type Reservation = Database['public']['Tables']['reservations']['Row'];
 type AdvanceOrder = Database['public']['Tables']['advance_orders']['Row'];
+type TableT = Database['public']['Tables']['tables']['Row'];
 
 export function Reservations() {
   const { business } = useAuth();
@@ -22,10 +23,13 @@ export function Reservations() {
     customer_email: '',
     order_date: new Date().toISOString().split('T')[0],
     order_time: '',
+    party_size: 2,
+    table_id: '',
     delivery_address: '',
     delivery_instructions: '',
     special_instructions: '',
   });
+  const [tables, setTables] = useState<TableT[]>([]);
 
   useEffect(() => {
     if (business) {
@@ -38,13 +42,21 @@ export function Reservations() {
 
     try {
       if (activeTab === 'reservations') {
-        const { data } = await supabase
-          .from('reservations')
-          .select('*')
-          .eq('business_id', business.id)
-          .eq('reservation_date', selectedDate)
-          .order('reservation_time');
-        setReservations(data || []);
+        const [resResult, tablesResult] = await Promise.all([
+          supabase
+            .from('reservations')
+            .select('*')
+            .eq('business_id', business.id)
+            .eq('reservation_date', selectedDate)
+            .order('reservation_time'),
+          supabase
+            .from('tables')
+            .select('*')
+            .eq('business_id', business.id)
+            .order('table_number'),
+        ]);
+        setReservations(resResult.data || []);
+        setTables(tablesResult.data || []);
       } else {
         const orderType = activeTab === 'delivery' ? 'delivery' : 'takeaway';
         const { data } = await supabase
@@ -75,7 +87,8 @@ export function Reservations() {
           customer_mobile: formData.customer_mobile,
           reservation_date: formData.order_date,
           reservation_time: formData.order_time,
-          party_size: 2,
+          party_size: formData.party_size,
+          table_id: formData.table_id || null,
           status: 'pending',
           special_requests: formData.special_instructions,
         } as never);
@@ -102,6 +115,8 @@ export function Reservations() {
         customer_email: '',
         order_date: new Date().toISOString().split('T')[0],
         order_time: '',
+        party_size: 2,
+        table_id: '',
         delivery_address: '',
         delivery_instructions: '',
         special_instructions: '',
@@ -304,6 +319,40 @@ export function Reservations() {
                       />
                     </div>
                   </>
+                )}
+
+                {activeTab === 'reservations' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Party Size *</label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        max={50}
+                        value={formData.party_size}
+                        onChange={(e) => setFormData({ ...formData, party_size: parseInt(e.target.value) || 1 })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Assign Table</label>
+                      <select
+                        value={formData.table_id}
+                        onChange={(e) => setFormData({ ...formData, table_id: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                      >
+                        <option value="">No preference</option>
+                        {tables
+                          .filter((t) => t.status === 'free' || t.id === formData.table_id)
+                          .map((t) => (
+                            <option key={t.id} value={t.id}>
+                              Table {t.table_number} ({t.capacity} seats)
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-4">

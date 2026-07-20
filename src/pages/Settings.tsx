@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Building2, CreditCard, Bell, Shield, Crown } from 'lucide-react';
+import { Save, Building2, CreditCard, Bell, Shield, Crown, Receipt } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -15,6 +15,13 @@ export function Settings() {
     phone: '',
     email: '',
   });
+  const [taxData, setTaxData] = useState({
+    cgst_rate: '2.5',
+    sgst_rate: '2.5',
+    igst_rate: '5',
+    service_charge_rate: '0',
+    enable_service_charge: false,
+  });
 
   useEffect(() => {
     if (business) {
@@ -25,8 +32,41 @@ export function Settings() {
         phone: business.phone || '',
         email: business.email || '',
       });
+      setTaxData({
+        cgst_rate: String(business.cgst_rate ?? 2.5),
+        sgst_rate: String(business.sgst_rate ?? 2.5),
+        igst_rate: String(business.igst_rate ?? 5),
+        service_charge_rate: String(business.service_charge_rate ?? 0),
+        enable_service_charge: business.enable_service_charge ?? false,
+      });
     }
   }, [business]);
+
+  const handleTaxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('businesses')
+        .update({
+          cgst_rate: parseFloat(taxData.cgst_rate) || 0,
+          sgst_rate: parseFloat(taxData.sgst_rate) || 0,
+          igst_rate: parseFloat(taxData.igst_rate) || 0,
+          service_charge_rate: parseFloat(taxData.service_charge_rate) || 0,
+          enable_service_charge: taxData.enable_service_charge,
+        } as never)
+        .eq('id', business.id);
+      if (error) throw error;
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (error) {
+      console.error('Error updating tax settings:', error);
+      alert('Failed to save tax settings.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,6 +182,95 @@ export function Settings() {
               {saved && (
                 <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
                   Settings saved successfully!
+                </div>
+              )}
+            </form>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Receipt className="w-6 h-6 text-amber-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Tax & Service Charge</h2>
+            </div>
+            <form onSubmit={handleTaxSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CGST Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={taxData.cgst_rate}
+                    onChange={(e) => setTaxData({ ...taxData, cgst_rate: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">SGST Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={taxData.sgst_rate}
+                    onChange={(e) => setTaxData({ ...taxData, sgst_rate: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">IGST Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={taxData.igst_rate}
+                    onChange={(e) => setTaxData({ ...taxData, igst_rate: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">Enable Service Charge</p>
+                  <p className="text-sm text-gray-600">Optional charge added to bills (e.g., 5% service charge)</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={taxData.enable_service_charge}
+                    onChange={(e) => setTaxData({ ...taxData, enable_service_charge: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                </label>
+              </div>
+              {taxData.enable_service_charge && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Service Charge Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={taxData.service_charge_rate}
+                    onChange={(e) => setTaxData({ ...taxData, service_charge_rate: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex items-center gap-2 px-6 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {loading ? 'Saving...' : 'Save Tax Settings'}
+              </button>
+              {saved && (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+                  Tax settings saved successfully!
                 </div>
               )}
             </form>

@@ -1,9 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Plus, CreditCard as Edit2, Trash2, Shield, User, Mail, Lock, Key } from 'lucide-react';
+import { Plus, CreditCard as Edit2, Trash2, Shield, User, Mail, Lock, Key, Clock, Calendar } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
+
+type AttendanceRecord = {
+  id: string;
+  business_id: string;
+  staff_id: string;
+  date: string;
+  clock_in: string | null;
+  clock_out: string | null;
+  status: string;
+  staff: { name: string; role: string } | null;
+};
 
 type StaffMember = Database['public']['Tables']['staff']['Row'] & {
   permissions?: string[];
@@ -62,10 +73,14 @@ export function Staff() {
   });
 
   const isOwner = currentStaff?.role === 'owner';
+  const [showAttendance, setShowAttendance] = useState(false);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<'staff' | 'attendance'>('staff');
 
   useEffect(() => {
     if (business) {
       loadStaff();
+      loadAttendance();
     }
   }, [business]);
 
@@ -85,6 +100,50 @@ export function Staff() {
       console.error('Error loading staff:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAttendance = async () => {
+    if (!business) return;
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const { data } = await supabase
+        .from('staff_attendance')
+        .select('*, staff:staff(name, role)')
+        .eq('business_id', business.id)
+        .eq('date', today)
+        .order('created_at', { ascending: false });
+      setAttendance((data as unknown as AttendanceRecord[]) || []);
+    } catch (error) {
+      console.error('Error loading attendance:', error);
+    }
+  };
+
+  const clockInStaff = async (staffId: string) => {
+    if (!business) return;
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toISOString();
+    try {
+      await supabase.from('staff_attendance').insert({
+        business_id: business.id,
+        staff_id: staffId,
+        date: today,
+        clock_in: now,
+        status: 'present',
+      } as never);
+      loadAttendance();
+    } catch (error) {
+      console.error('Error clocking in:', error);
+    }
+  };
+
+  const clockOutStaff = async (recordId: string) => {
+    const now = new Date().toISOString();
+    try {
+      await supabase.from('staff_attendance').update({ clock_out: now } as never).eq('id', recordId);
+      loadAttendance();
+    } catch (error) {
+      console.error('Error clocking out:', error);
     }
   };
 
@@ -181,20 +240,88 @@ export function Staff() {
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Staff Management</h1>
           <p className="text-gray-600">Manage your restaurant team, roles, and access levels</p>
         </div>
-        <button
-          onClick={() => {
-            setEditingId(null);
-            setFormData({ name: '', email: '', password: '', role: 'waiter', permissions: [] });
-            setShowModal(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Add Staff
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('staff')}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                activeTab === 'staff' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Staff
+            </button>
+            <button
+              onClick={() => setActiveTab('attendance')}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                activeTab === 'attendance' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Attendance
+            </button>
+          </div>
+          {activeTab === 'staff' && (
+            <button
+              onClick={() => {
+                setEditingId(null);
+                setFormData({ name: '', email: '', password: '', role: 'waiter', permissions: [] });
+                setShowModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Add Staff
+            </button>
+          )}
+        </div>
       </div>
 
-      {loading ? (
+      {activeTab === 'attendance' ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="w-5 h-5 text-amber-500" />
+            <h2 className="text-lg font-semibold text-gray-900">Today's Attendance — {new Date().toLocaleDateString()}</h2>
+          </div>
+          <div className="space-y-3">
+            {staffMembers.map((member) => {
+              const record = attendance.find((a) => a.staff_id === member.id);
+              const clockIn = record?.clock_in ? new Date(record.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+              const clockOut = record?.clock_out ? new Date(record.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+              return (
+                <div key={member.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                      <User className="w-5 h-5 text-gray-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{member.name}</p>
+                      <p className="text-xs text-gray-500 capitalize">{member.role}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {clockIn && (
+                      <div className="text-sm text-right">
+                        <p className="text-gray-600">In: <span className="font-medium text-gray-900">{clockIn}</span></p>
+                        {clockOut && <p className="text-gray-600">Out: <span className="font-medium text-gray-900">{clockOut}</span></p>}
+                      </div>
+                    )}
+                    <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                      clockOut ? 'bg-gray-100 text-gray-600' : clockIn ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {clockOut ? 'Done' : clockIn ? 'Working' : 'Not in'}
+                    </span>
+                    {!clockIn && (
+                      <button onClick={() => clockInStaff(member.id)} className="px-3 py-1.5 text-xs bg-green-50 text-green-700 hover:bg-green-100 rounded-lg font-medium">Clock In</button>
+                    )}
+                    {clockIn && !clockOut && (
+                      <button onClick={() => clockOutStaff(record!.id)} className="px-3 py-1.5 text-xs bg-red-50 text-red-700 hover:bg-red-100 rounded-lg font-medium">Clock Out</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : loading ? (
         <div className="text-center py-12">
           <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
         </div>

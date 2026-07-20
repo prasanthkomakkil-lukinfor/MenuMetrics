@@ -34,6 +34,11 @@ export interface Database {
           loyalty_redemption_rate: number;
           loyalty_gold_threshold: number;
           loyalty_silver_threshold: number;
+          cgst_rate: number;
+          sgst_rate: number;
+          igst_rate: number;
+          service_charge_rate: number;
+          enable_service_charge: boolean;
           created_at: string;
           updated_at: string;
         };
