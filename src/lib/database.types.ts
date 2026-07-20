@@ -30,6 +30,10 @@ export interface Database {
           address: string | null;
           phone: string | null;
           email: string | null;
+          loyalty_points_per_rupee: number;
+          loyalty_redemption_rate: number;
+          loyalty_gold_threshold: number;
+          loyalty_silver_threshold: number;
           created_at: string;
           updated_at: string;
         };
@@ -85,6 +89,7 @@ export interface Database {
           available_swiggy: boolean;
           available_qr: boolean;
           recipe_cost: number;
+          stock_qty: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -289,6 +294,128 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['order_items']['Row'], 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['order_items']['Insert']>;
+      };
+      ingredients: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: string;
+          unit: string;
+          stock_qty: number;
+          reorder_level: number;
+          cost_per_unit: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['ingredients']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['ingredients']['Insert']>;
+      };
+      recipes: {
+        Row: {
+          id: string;
+          business_id: string;
+          item_id: string;
+          ingredient_id: string;
+          quantity_needed: number;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['recipes']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['recipes']['Insert']>;
+      };
+      stock_movements: {
+        Row: {
+          id: string;
+          business_id: string;
+          ingredient_id: string | null;
+          item_id: string | null;
+          movement_type: string;
+          quantity: number;
+          reason: string | null;
+          staff_id: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['stock_movements']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['stock_movements']['Insert']>;
+      };
+      suppliers: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: string;
+          contact_person: string | null;
+          mobile: string | null;
+          email: string | null;
+          address: string | null;
+          gstin: string | null;
+          lead_time_days: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['suppliers']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['suppliers']['Insert']>;
+      };
+      purchase_orders: {
+        Row: {
+          id: string;
+          business_id: string;
+          supplier_id: string | null;
+          po_number: string;
+          status: string;
+          total_amount: number;
+          expected_delivery: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['purchase_orders']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['purchase_orders']['Insert']>;
+      };
+      purchase_order_items: {
+        Row: {
+          id: string;
+          purchase_order_id: string;
+          item_name: string;
+          quantity: number;
+          unit: string;
+          unit_cost: number;
+          total_cost: number;
+          received_quantity: number;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['purchase_order_items']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['purchase_order_items']['Insert']>;
+      };
+      loyalty_transactions: {
+        Row: {
+          id: string;
+          business_id: string;
+          customer_id: string;
+          bill_id: string | null;
+          type: string;
+          points: number;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['loyalty_transactions']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['loyalty_transactions']['Insert']>;
+      };
+      staff_attendance: {
+        Row: {
+          id: string;
+          business_id: string;
+          staff_id: string;
+          date: string;
+          check_in: string | null;
+          check_out: string | null;
+          shift: string;
+          status: string;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['staff_attendance']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['staff_attendance']['Insert']>;
       };
     };
     Views: {};

@@ -157,6 +157,49 @@ export function Billing() {
           .eq('id', selectedBill.order.table_id);
       }
 
+      // Award loyalty points + enrich customer on full payment
+      if (newStatus === 'paid' && selectedBill.order?.customer_mobile) {
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('business_id', business.id)
+          .eq('mobile', selectedBill.order.customer_mobile)
+          .maybeSingle();
+
+        if (customer) {
+          const pointsPerRupee = Number(business.loyalty_points_per_rupee) || 0.1;
+          const earnedPoints = Math.floor(Number(selectedBill.total_amount) * pointsPerRupee);
+          const newTotalSpent = Number(customer.total_spent) + Number(selectedBill.total_amount);
+          const newVisits = (customer.total_visits || 0) + 1;
+
+          const goldThreshold = Number(business.loyalty_gold_threshold) || 50000;
+          const silverThreshold = Number(business.loyalty_silver_threshold) || 10000;
+          let newTier = customer.loyalty_tier;
+          if (newTotalSpent >= goldThreshold) newTier = 'gold';
+          else if (newTotalSpent >= silverThreshold) newTier = 'silver';
+          else newTier = 'bronze';
+
+          await supabase.from('customers').update({
+            total_spent: newTotalSpent,
+            total_visits: newVisits,
+            loyalty_points: (customer.loyalty_points || 0) + earnedPoints,
+            loyalty_tier: newTier,
+            last_visit_at: new Date().toISOString(),
+          } as never).eq('id', customer.id);
+
+          if (earnedPoints > 0) {
+            await supabase.from('loyalty_transactions').insert({
+              business_id: business.id,
+              customer_id: customer.id,
+              bill_id: selectedBill.id,
+              type: 'earn',
+              points: earnedPoints,
+              description: `Earned on bill #${selectedBill.bill_number}`,
+            } as never);
+          }
+        }
+      }
+
       setShowPaymentModal(false);
       setPaidAmount('');
       setCardLast4('');

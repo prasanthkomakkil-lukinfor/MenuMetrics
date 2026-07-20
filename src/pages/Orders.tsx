@@ -198,11 +198,13 @@ export function Orders() {
     setSubmitting(true);
     try {
       const orderNumber = `ORD${Date.now().toString().slice(-6)}`;
+      const tokenNumber = `T${String(orders.length + 1).padStart(3, '0')}`;
 
       const orderPayload = {
         business_id: business.id,
         order_type: orderType,
         table_id: orderType === 'dine_in' ? selectedTable?.id : null,
+        token_number: tokenNumber,
         customer_name: customerName || null,
         customer_mobile: customerMobile || null,
         staff_id: staff.id,
@@ -378,6 +380,59 @@ export function Orders() {
       alert('Failed to generate bill');
     }
   };
+
+  const transferTable = async (order: Order, newTableId: string) => {
+    if (!business) return;
+    try {
+      const oldTableId = order.table_id;
+      await supabase.from('orders').update({ table_id: newTableId } as never).eq('id', order.id);
+      if (oldTableId) {
+        await supabase.from('tables').update({ status: 'free' } as never).eq('id', oldTableId);
+      }
+      await supabase.from('tables').update({ status: 'occupied' } as never).eq('id', newTableId);
+      loadData();
+    } catch (error) {
+      console.error('Error transferring table:', error);
+      alert('Failed to transfer table');
+    }
+  };
+
+  const holdOrder = async (order: Order) => {
+    try {
+      await supabase.from('orders').update({ status: 'held' } as never).eq('id', order.id);
+      if (order.table_id) {
+        await supabase.from('tables').update({ status: 'free' } as never).eq('id', order.table_id);
+      }
+      loadData();
+    } catch (error) {
+      console.error('Error holding order:', error);
+    }
+  };
+
+  const resumeOrder = async (order: Order, tableId: string) => {
+    try {
+      await supabase.from('orders').update({ status: 'active', table_id: tableId } as never).eq('id', order.id);
+      await supabase.from('tables').update({ status: 'occupied' } as never).eq('id', tableId);
+      loadData();
+    } catch (error) {
+      console.error('Error resuming order:', error);
+    }
+  };
+
+  const cancelOrder = async (order: Order) => {
+    if (!confirm('Cancel this order? This cannot be undone.')) return;
+    try {
+      await supabase.from('orders').update({ status: 'cancelled' } as never).eq('id', order.id);
+      if (order.table_id) {
+        await supabase.from('tables').update({ status: 'free' } as never).eq('id', order.table_id);
+      }
+      loadData();
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+    }
+  };
+
+  const [showTransferModal, setShowTransferModal] = useState<Order | null>(null);
 
   const itemTypeColor: Record<string, string> = {
     veg: 'border-green-500',
@@ -555,6 +610,9 @@ export function Orders() {
                 >
                   <div>
                     <span className="font-semibold text-gray-900">{order.customer_name || 'Walk-in'}</span>
+                    {order.token_number && (
+                      <span className="text-xs text-blue-600 ml-2">#{order.token_number}</span>
+                    )}
                     {order.customer_mobile && (
                       <span className="text-gray-600 ml-2">{order.customer_mobile}</span>
                     )}
@@ -588,7 +646,12 @@ export function Orders() {
                   className="w-full p-4 rounded-lg bg-gray-50 border border-gray-200 hover:border-amber-300 text-left transition-all"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-gray-900">{order.customer_name || 'Walk-in'}</span>
+                    <div>
+                      <span className="font-semibold text-gray-900">{order.customer_name || 'Walk-in'}</span>
+                      {order.token_number && (
+                        <span className="text-xs text-blue-600 ml-2">#{order.token_number}</span>
+                      )}
+                    </div>
                     <span className="font-bold text-gray-900">₹{order.total_amount}</span>
                   </div>
                   {order.customer_mobile && (
@@ -617,6 +680,35 @@ export function Orders() {
                 <span className="text-sm bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-medium">
                   {orderType === 'dine_in' ? `Table ${selectedTable?.table_number || ''}` : orderType === 'takeaway' ? 'Takeaway' : 'Delivery'}
                 </span>
+                {activeOrder?.token_number && (
+                  <span className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-medium">
+                    Token {activeOrder.token_number}
+                  </span>
+                )}
+                {activeOrder && (
+                  <div className="flex gap-1 ml-2">
+                    {orderType === 'dine_in' && (
+                      <button
+                        onClick={() => setShowTransferModal(activeOrder)}
+                        className="px-3 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-medium"
+                      >
+                        Transfer Table
+                      </button>
+                    )}
+                    <button
+                      onClick={() => holdOrder(activeOrder)}
+                      className="px-3 py-1 text-xs bg-yellow-50 text-yellow-700 hover:bg-yellow-100 rounded-lg font-medium"
+                    >
+                      Hold
+                    </button>
+                    <button
+                      onClick={() => cancelOrder(activeOrder)}
+                      className="px-3 py-1 text-xs bg-red-50 text-red-700 hover:bg-red-100 rounded-lg font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => { setShowOrderPanel(false); setCart([]); }}
@@ -899,6 +991,64 @@ export function Orders() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Held Orders */}
+      {orders.filter((o) => o.status === 'held').length > 0 && (
+        <div className="fixed bottom-4 right-4 bg-white rounded-xl shadow-lg border-2 border-yellow-300 p-4 max-w-sm z-40">
+          <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+            <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+            Held Orders ({orders.filter((o) => o.status === 'held').length})
+          </h3>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {orders.filter((o) => o.status === 'held').map((order) => (
+              <div key={order.id} className="flex items-center justify-between bg-yellow-50 p-2 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{order.customer_name || 'Guest'}</p>
+                  <p className="text-xs text-gray-500">₹{order.total_amount} · {order.token_number}</p>
+                </div>
+                <select
+                  onChange={(e) => { if (e.target.value) resumeOrder(order, e.target.value); e.target.value = ''; }}
+                  className="text-xs px-2 py-1 border border-gray-300 rounded"
+                >
+                  <option value="">Resume to...</option>
+                  {tables.filter((t) => t.status === 'free').map((t) => (
+                    <option key={t.id} value={t.id}>Table {t.table_number}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Table Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-sm w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Transfer Table</h2>
+              <button onClick={() => setShowTransferModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Select a free table to transfer this order to:</p>
+            <div className="grid grid-cols-3 gap-2">
+              {tables.filter((t) => t.status === 'free').map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => { transferTable(showTransferModal, t.id); setShowTransferModal(null); }}
+                  className="p-3 border-2 border-gray-200 hover:border-amber-500 hover:bg-amber-50 rounded-lg text-center transition-colors"
+                >
+                  <p className="font-bold text-gray-900">{t.table_number}</p>
+                  <p className="text-xs text-gray-500">{t.capacity} seats</p>
+                </button>
+              ))}
+            </div>
+            {tables.filter((t) => t.status === 'free').length === 0 && (
+              <p className="text-gray-500 text-center py-4">No free tables available</p>
+            )}
           </div>
         </div>
       )}
