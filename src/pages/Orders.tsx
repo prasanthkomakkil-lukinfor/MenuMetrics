@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, ChefHat, ShoppingBag, Receipt, Trash2, Minus, Users, Phone, Search } from 'lucide-react';
+import { Plus, X, ChefHat, ShoppingBag, Receipt, Trash2, Minus, Users, Phone, Search, Bike } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -37,7 +37,7 @@ export function Orders() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'floor' | 'takeaway'>('floor');
+  const [view, setView] = useState<'floor' | 'takeaway' | 'delivery'>('floor');
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [showOrderPanel, setShowOrderPanel] = useState(false);
@@ -47,7 +47,10 @@ export function Orders() {
   const [guestCount, setGuestCount] = useState(2);
   const [customerName, setCustomerName] = useState('');
   const [customerMobile, setCustomerMobile] = useState('');
-  const [orderType, setOrderType] = useState<'dine_in' | 'takeaway'>('dine_in');
+  const [orderType, setOrderType] = useState<'dine_in' | 'takeaway' | 'delivery'>('dine_in');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryInstructions, setDeliveryInstructions] = useState('');
+  const [deliveryCharge, setDeliveryCharge] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [activeOrderItems, setActiveOrderItems] = useState<(OrderItem & { item?: Item })[]>([]);
 
@@ -124,7 +127,7 @@ export function Orders() {
   const occupiedTables = tables.filter((t) => t.status === 'occupied').length;
   const billRequestedTables = tables.filter((t) => t.status === 'bill_requested').length;
 
-  const openNewOrder = (table: Table | null, type: 'dine_in' | 'takeaway') => {
+  const openNewOrder = (table: Table | null, type: 'dine_in' | 'takeaway' | 'delivery') => {
     setSelectedTable(table);
     setActiveOrder(null);
     setActiveOrderItems([]);
@@ -132,6 +135,9 @@ export function Orders() {
     setGuestCount(2);
     setCustomerName('');
     setCustomerMobile('');
+    setDeliveryAddress('');
+    setDeliveryInstructions('');
+    setDeliveryCharge('');
     setOrderType(type);
     setShowOrderPanel(true);
   };
@@ -139,10 +145,13 @@ export function Orders() {
   const openExistingOrder = async (order: Order) => {
     setActiveOrder(order);
     setSelectedTable(tables.find((t) => t.id === order.table_id) || null);
-    setOrderType(order.order_type as 'dine_in' | 'takeaway');
+    setOrderType(order.order_type as 'dine_in' | 'takeaway' | 'delivery');
     setGuestCount(order.guest_count);
     setCustomerName(order.customer_name || '');
     setCustomerMobile(order.customer_mobile || '');
+    setDeliveryAddress(order.delivery_address || '');
+    setDeliveryInstructions(order.delivery_instructions || '');
+    setDeliveryCharge(order.delivery_charge ? String(order.delivery_charge) : '');
     setCart([]);
     setShowOrderPanel(true);
     await loadActiveOrderItems(order.id);
@@ -176,7 +185,8 @@ export function Orders() {
 
   const cartSubtotal = cart.reduce((sum, c) => sum + Number(c.item.price) * c.quantity, 0);
   const cartTax = cart.reduce((sum, c) => sum + (Number(c.item.price) * c.quantity * Number(c.item.gst_percent)) / 100, 0);
-  const cartTotal = cartSubtotal + cartTax;
+  const deliveryAmt = orderType === 'delivery' ? (parseFloat(deliveryCharge) || 0) : 0;
+  const cartTotal = cartSubtotal + cartTax + deliveryAmt;
 
   const createOrder = async () => {
     if (!business || !staff) return;
@@ -203,6 +213,9 @@ export function Orders() {
         discount_percent: 0,
         tax_amount: cartTax,
         total_amount: cartTotal,
+        delivery_address: orderType === 'delivery' ? deliveryAddress || null : null,
+        delivery_instructions: orderType === 'delivery' ? deliveryInstructions || null : null,
+        delivery_charge: deliveryAmt,
         notes: null,
       };
 
@@ -306,19 +319,21 @@ export function Orders() {
       // Update order total
       const newSubtotal = Number(activeOrder.subtotal) + cartSubtotal;
       const newTax = Number(activeOrder.tax_amount) + cartTax;
-      const newTotal = newSubtotal + newTax;
+      const newDelivery = Number(activeOrder.delivery_charge || 0) + deliveryAmt;
+      const newTotal = newSubtotal + newTax + newDelivery;
       await supabase
         .from('orders')
         .update({
           subtotal: newSubtotal,
           tax_amount: newTax,
           total_amount: newTotal,
+          delivery_charge: newDelivery,
         } as never)
         .eq('id', activeOrder.id);
 
       setCart([]);
       await loadActiveOrderItems(activeOrder.id);
-      setActiveOrder({ ...activeOrder, subtotal: newSubtotal, tax_amount: newTax, total_amount: newTotal });
+      setActiveOrder({ ...activeOrder, subtotal: newSubtotal, tax_amount: newTax, total_amount: newTotal, delivery_charge: newDelivery });
       loadData();
     } catch (error) {
       console.error('Error adding items:', error);
@@ -401,6 +416,15 @@ export function Orders() {
           >
             <ShoppingBag className="w-4 h-4" />
             Takeaway
+          </button>
+          <button
+            onClick={() => { setView('delivery'); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${
+              view === 'delivery' ? 'bg-amber-500 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            <Bike className="w-4 h-4" />
+            Delivery
           </button>
         </div>
       </div>
@@ -507,7 +531,7 @@ export function Orders() {
             )}
           </div>
         </div>
-      ) : (
+      ) : view === 'takeaway' ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Takeaway Orders</h2>
@@ -541,6 +565,43 @@ export function Orders() {
             </div>
           )}
         </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Delivery Orders</h2>
+            <button
+              onClick={() => openNewOrder(null, 'delivery')}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Delivery
+            </button>
+          </div>
+          {orders.filter((o) => o.order_type === 'delivery').length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No active delivery orders</p>
+          ) : (
+            <div className="space-y-2">
+              {orders.filter((o) => o.order_type === 'delivery').map((order) => (
+                <button
+                  key={order.id}
+                  onClick={() => openExistingOrder(order)}
+                  className="w-full p-4 rounded-lg bg-gray-50 border border-gray-200 hover:border-amber-300 text-left transition-all"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-gray-900">{order.customer_name || 'Walk-in'}</span>
+                    <span className="font-bold text-gray-900">₹{order.total_amount}</span>
+                  </div>
+                  {order.customer_mobile && (
+                    <p className="text-sm text-gray-600">{order.customer_mobile}</p>
+                  )}
+                  {order.delivery_address && (
+                    <p className="text-xs text-gray-500 mt-1">{order.delivery_address}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Order Panel Modal */}
@@ -554,7 +615,7 @@ export function Orders() {
                   {activeOrder ? 'Add Items' : 'New Order'}
                 </h2>
                 <span className="text-sm bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-medium">
-                  {orderType === 'dine_in' ? `Table ${selectedTable?.table_number || ''}` : 'Takeaway'}
+                  {orderType === 'dine_in' ? `Table ${selectedTable?.table_number || ''}` : orderType === 'takeaway' ? 'Takeaway' : 'Delivery'}
                 </span>
               </div>
               <button
@@ -604,6 +665,44 @@ export function Orders() {
                       />
                     </div>
                   </div>
+                  {orderType === 'delivery' && (
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-500 font-medium">Delivery Address</label>
+                        <textarea
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
+                          placeholder="Full delivery address"
+                          rows={2}
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-gray-500 font-medium">Delivery Instructions</label>
+                          <input
+                            type="text"
+                            value={deliveryInstructions}
+                            onChange={(e) => setDeliveryInstructions(e.target.value)}
+                            placeholder="e.g. Ring doorbell"
+                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 font-medium">Delivery Charge (₹)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={deliveryCharge}
+                            onChange={(e) => setDeliveryCharge(e.target.value)}
+                            placeholder="0"
+                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Search + Categories */}
@@ -753,6 +852,12 @@ export function Orders() {
                         <span>GST</span>
                         <span>₹{cartTax.toFixed(2)}</span>
                       </div>
+                      {orderType === 'delivery' && deliveryAmt > 0 && (
+                        <div className="flex justify-between text-gray-600">
+                          <span>Delivery Charge</span>
+                          <span>₹{deliveryAmt.toFixed(2)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100">
                         <span>Total</span>
                         <span>₹{cartTotal.toFixed(2)}</span>

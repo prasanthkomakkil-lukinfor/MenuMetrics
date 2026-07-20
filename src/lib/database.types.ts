@@ -125,6 +125,9 @@ export interface Database {
           tax_amount: number;
           total_amount: number;
           notes: string | null;
+          delivery_address: string | null;
+          delivery_instructions: string | null;
+          delivery_charge: number;
           created_at: string;
           updated_at: string;
         };

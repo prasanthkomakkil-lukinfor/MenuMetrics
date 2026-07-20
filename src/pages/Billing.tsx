@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Printer, Share2, DollarSign, CheckCircle, Tag, CreditCard, X, Receipt } from 'lucide-react';
+import { Printer, Share2, DollarSign, CircleCheck as CheckCircle, Tag, CreditCard, X, Receipt } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -46,7 +46,7 @@ export function Billing() {
     try {
       let query = supabase
         .from('bills')
-        .select('*, orders(*)')
+        .select('*, order:orders(*)')
         .eq('business_id', business.id);
 
       if (filterStatus !== 'all') {
@@ -291,7 +291,7 @@ export function Billing() {
                     </div>
                     <div className="flex items-center justify-between text-sm text-gray-600">
                       <span>
-                        {bill.order?.order_type === 'dine_in' ? 'Dine-In' : bill.order?.order_type === 'takeaway' ? 'Takeaway' : 'Order'}
+                        {bill.order?.order_type === 'dine_in' ? 'Dine-In' : bill.order?.order_type === 'takeaway' ? 'Takeaway' : bill.order?.order_type === 'delivery' ? 'Delivery' : 'Order'}
                         {bill.order?.customer_name && ` · ${bill.order.customer_name}`}
                       </span>
                       <span className="font-bold text-gray-900">₹{bill.total_amount}</span>
@@ -342,6 +342,19 @@ export function Billing() {
                     Takeaway Order
                   </div>
                 )}
+                {selectedBill.order?.order_type === 'delivery' && (
+                  <div className="mt-2">
+                    <div className="inline-flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded text-xs font-semibold">
+                      Delivery Order
+                    </div>
+                    {selectedBill.order.delivery_address && (
+                      <p className="text-xs text-gray-600 mt-1">Address: {selectedBill.order.delivery_address}</p>
+                    )}
+                    {selectedBill.order.delivery_instructions && (
+                      <p className="text-xs text-gray-500">Instructions: {selectedBill.order.delivery_instructions}</p>
+                    )}
+                  </div>
+                )}
                 {selectedBill.order?.customer_name && (
                   <p className="text-xs text-gray-600 mt-1">Customer: {selectedBill.order.customer_name}</p>
                 )}
@@ -386,6 +399,12 @@ export function Billing() {
                   <span className="text-gray-600">SGST</span>
                   <span className="font-medium">₹{selectedBill.sgst_amount}</span>
                 </div>
+                {selectedBill.order?.order_type === 'delivery' && Number(selectedBill.order?.delivery_charge || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Delivery Charge</span>
+                    <span className="font-medium">₹{selectedBill.order.delivery_charge}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-gray-900 text-base pt-1.5 border-t border-gray-100">
                   <span>Total</span>
                   <span>₹{selectedBill.total_amount}</span>
