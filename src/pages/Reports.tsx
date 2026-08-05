@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChartBar as BarChart3, TrendingUp, Download, Calendar } from 'lucide-react';
+import { ChartBar as BarChart3, TrendingUp, Download, Calendar, Store } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -10,9 +10,19 @@ type OrderItem = Database['public']['Tables']['order_items']['Row'] & { item?: {
 
 type BillWithOrder = Bill & { order?: { order_type: string; customer_name: string | null; table_id: string | null } };
 
+interface BranchComparison {
+  branchId: string;
+  branchName: string;
+  city: string | null;
+  revenue: number;
+  bills: number;
+  avgBill: number;
+}
+
 export function Reports() {
-  const { business } = useAuth();
+  const { business, branches, isAllBranches } = useAuth();
   const [bills, setBills] = useState<BillWithOrder[]>([]);
+  const [branchComparisons, setBranchComparisons] = useState<BranchComparison[]>([]);
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'custom'>('today');
   const [loading, setLoading] = useState(true);
   const [customStart, setCustomStart] = useState('');
@@ -22,13 +32,13 @@ export function Reports() {
   const [topItems, setTopItems] = useState<{ name: string; qty: number; revenue: number }[]>([]);
 
   useEffect(() => {
-    if (business) {
+    if (business || isAllBranches) {
       loadReports();
     }
-  }, [business, dateRange, customStart, customEnd, customStartTime, customEndTime]);
+  }, [business, isAllBranches, branches, dateRange, customStart, customEnd, customStartTime, customEndTime]);
 
   const loadReports = async () => {
-    if (!business) return;
+    if (!business && !isAllBranches) return;
 
     try {
       setLoading(true);
@@ -56,10 +66,12 @@ export function Reports() {
         startDate.setHours(0, 0, 0, 0);
       }
 
+      const businessIds = isAllBranches ? branches.map((b) => b.id) : [business!.id];
+
       let query = supabase
         .from('bills')
         .select('*, order:orders(*)')
-        .eq('business_id', business.id)
+        .in('business_id', businessIds)
         .gte('created_at', startDate.toISOString());
 
       if (endDate) {
@@ -69,6 +81,34 @@ export function Reports() {
       const { data } = await query.order('created_at', { ascending: false });
 
       setBills((data as BillWithOrder[]) || []);
+
+      // Per-branch comparison when in aggregate mode
+      if (isAllBranches) {
+        const comparisons = await Promise.all(
+          branches.map(async (b) => {
+            let bQuery = supabase
+              .from('bills')
+              .select('total_amount')
+              .eq('business_id', b.id)
+              .gte('created_at', startDate.toISOString());
+            if (endDate) bQuery = bQuery.lte('created_at', endDate.toISOString());
+            const { data: bBills } = await bQuery;
+            const revenue = bBills?.reduce((s, x) => s + Number(x.total_amount), 0) || 0;
+            const count = bBills?.length || 0;
+            return {
+              branchId: b.id,
+              branchName: b.branch_name || b.name,
+              city: b.city,
+              revenue,
+              bills: count,
+              avgBill: count > 0 ? revenue / count : 0,
+            };
+          })
+        );
+        setBranchComparisons(comparisons.sort((a, b) => b.revenue - a.revenue));
+      } else {
+        setBranchComparisons([]);
+      }
 
       // Load order items for top-selling analysis
       if (data && data.length > 0) {
@@ -325,6 +365,62 @@ export function Reports() {
           </div>
         )}
       </div>
+
+      {branchComparisons.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Store className="w-5 h-5 text-amber-500" />
+            <h2 className="text-lg font-semibold text-gray-900">Branch Performance Comparison</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b-2 border-gray-200">
+                <tr>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Rank</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Branch</th>
+                  <th className="text-right py-3 px-4 font-semibold text-gray-900">Revenue</th>
+                  <th className="text-right py-3 px-4 font-semibold text-gray-900">Bills</th>
+                  <th className="text-right py-3 px-4 font-semibold text-gray-900">Avg Bill</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900" style={{ width: '30%' }}>Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const maxRevenue = branchComparisons[0]?.revenue || 1;
+                  const totalRev = branchComparisons.reduce((s, b) => s + b.revenue, 0) || 1;
+                  return branchComparisons.map((b, idx) => (
+                    <tr key={b.branchId} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-gray-200 text-gray-700' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'
+                        }`}>{idx + 1}</span>
+                      </td>
+                      <td className="py-3 px-4 font-medium text-gray-900">
+                        {b.branchName}
+                        {b.city && <span className="text-gray-400 text-xs ml-2">{b.city}</span>}
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-gray-900">₹{b.revenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                      <td className="py-3 px-4 text-right text-gray-700">{b.bills}</td>
+                      <td className="py-3 px-4 text-right text-gray-700">₹{Math.round(b.avgBill).toLocaleString('en-IN')}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full"
+                              style={{ width: `${(b.revenue / maxRevenue) * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-500 w-12 text-right">{((b.revenue / totalRev) * 100).toFixed(1)}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

@@ -5,6 +5,7 @@ import type { Database } from '../lib/database.types';
 
 type Staff = Database['public']['Tables']['staff']['Row'];
 type Business = Database['public']['Tables']['businesses']['Row'];
+type Brand = Database['public']['Tables']['brands']['Row'];
 
 interface PendingVerification {
   email: string;
@@ -18,6 +19,10 @@ interface AuthContextType {
   session: Session | null;
   staff: Staff | null;
   business: Business | null;
+  brand: Brand | null;
+  branches: Business[];
+  activeBranchId: string | null;
+  isAllBranches: boolean;
   loading: boolean;
   pendingVerification: PendingVerification | null;
   signIn: (email: string, password: string, remember: boolean) => Promise<{ needsVerification?: boolean; error?: string }>;
@@ -26,19 +31,27 @@ interface AuthContextType {
   resendOTP: (email: string) => Promise<{ error?: string }>;
   cancelVerification: () => void;
   signOut: () => Promise<void>;
+  switchBranch: (branchId: string | null) => void;
+  loadBranches: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const REMEMBER_KEY = 'serveup_remember_email';
+const ACTIVE_BRANCH_KEY = 'serveup_active_branch';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
+  const [brand, setBrand] = useState<Brand | null>(null);
+  const [branches, setBranches] = useState<Business[]>([]);
+  const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingVerification, setPendingVerification] = useState<PendingVerification | null>(null);
+
+  const isAllBranches = activeBranchId === null && branches.length > 1;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -61,6 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setStaff(null);
         setBusiness(null);
+        setBrand(null);
+        setBranches([]);
+        setActiveBranchId(null);
         setLoading(false);
       }
     });
@@ -87,20 +103,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStaff(staffData);
 
       if (staffData) {
-        const { data: businessData, error: businessError } = await supabase
-          .from('businesses')
-          .select('*')
-          .eq('id', staffData.business_id)
-          .maybeSingle();
+        // If staff has a brand_id, load all branches under that brand
+        if (staffData.brand_id) {
+          const { data: brandData } = await supabase
+            .from('brands')
+            .select('*')
+            .eq('id', staffData.brand_id)
+            .maybeSingle();
 
-        if (businessError) throw businessError;
-        setBusiness(businessData);
+          setBrand(brandData);
+
+          const { data: branchList } = await supabase
+            .from('businesses')
+            .select('*')
+            .eq('brand_id', staffData.brand_id)
+            .order('branch_name');
+
+          const activeBranches = (branchList || []).filter((b) => b.is_active);
+          setBranches(activeBranches);
+
+          // Determine active branch
+          const savedBranchId = localStorage.getItem(ACTIVE_BRANCH_KEY);
+          if (savedBranchId === 'all' || (savedBranchId === null && activeBranches.length > 1)) {
+            setActiveBranchId(null);
+          } else if (savedBranchId && activeBranches.some((b) => b.id === savedBranchId)) {
+            setActiveBranchId(savedBranchId);
+            const active = activeBranches.find((b) => b.id === savedBranchId);
+            setBusiness(active || null);
+          } else if (activeBranches.length === 1) {
+            setActiveBranchId(activeBranches[0].id);
+            setBusiness(activeBranches[0]);
+          } else {
+            setActiveBranchId(null);
+            setBusiness(null);
+          }
+        } else {
+          // Single-branch mode (existing behavior)
+          const { data: businessData, error: businessError } = await supabase
+            .from('businesses')
+            .select('*')
+            .eq('id', staffData.business_id)
+            .maybeSingle();
+
+          if (businessError) throw businessError;
+          setBusiness(businessData);
+          setBranches(businessData ? [businessData] : []);
+          setActiveBranchId(businessData?.id ?? null);
+        }
       }
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const switchBranch = (branchId: string | null) => {
+    if (branchId === null) {
+      setActiveBranchId(null);
+      setBusiness(null);
+      localStorage.setItem(ACTIVE_BRANCH_KEY, 'all');
+    } else {
+      const selected = branches.find((b) => b.id === branchId);
+      if (selected) {
+        setActiveBranchId(branchId);
+        setBusiness(selected);
+        localStorage.setItem(ACTIVE_BRANCH_KEY, branchId);
+      }
+    }
+  };
+
+  const loadBranches = async () => {
+    if (!brand) return;
+    const { data } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('brand_id', brand.id)
+      .order('branch_name');
+    setBranches((data || []).filter((b) => b.is_active));
   };
 
   const signIn = async (email: string, password: string, remember: boolean) => {
@@ -174,6 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     localStorage.removeItem(REMEMBER_KEY);
+    localStorage.removeItem(ACTIVE_BRANCH_KEY);
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
@@ -183,6 +264,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     staff,
     business,
+    brand,
+    branches,
+    activeBranchId,
+    isAllBranches,
     loading,
     pendingVerification,
     signIn,
@@ -191,6 +276,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resendOTP,
     cancelVerification,
     signOut,
+    switchBranch,
+    loadBranches,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

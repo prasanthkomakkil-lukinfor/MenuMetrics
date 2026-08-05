@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, ShoppingCart, DollarSign, Users, CircleAlert as AlertCircle, Sparkles } from 'lucide-react';
+import { TrendingUp, ShoppingCart, DollarSign, Users, CircleAlert as AlertCircle, Sparkles, Store } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -11,35 +11,91 @@ interface DashboardStats {
   activeTables: number;
 }
 
+interface BranchStat {
+  branchId: string;
+  branchName: string;
+  city: string | null;
+  todaySales: number;
+  billsCount: number;
+}
+
 export function Dashboard() {
-  const { business } = useAuth();
+  const { business, branches, isAllBranches } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     todaySales: 0,
     billsCount: 0,
     avgBill: 0,
     activeTables: 0,
   });
+  const [branchStats, setBranchStats] = useState<BranchStat[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (business) {
+    if (business || isAllBranches) {
       loadDashboardStats();
       const interval = setInterval(loadDashboardStats, 60000);
       return () => clearInterval(interval);
     }
-  }, [business]);
+  }, [business, isAllBranches, branches]);
 
   const loadDashboardStats = async () => {
-    if (!business) return;
+    if (!business && !isAllBranches) return;
 
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
+      if (isAllBranches) {
+        // Aggregate across all branches
+        const branchIds = branches.map((b) => b.id);
+        const { data: bills } = await supabase
+          .from('bills')
+          .select('total_amount, business_id')
+          .in('business_id', branchIds)
+          .gte('created_at', today.toISOString());
+
+        const todaySales = bills?.reduce((sum, bill) => sum + Number(bill.total_amount), 0) || 0;
+        const billsCount = bills?.length || 0;
+
+        const { data: tables } = await supabase
+          .from('tables')
+          .select('status')
+          .in('business_id', branchIds)
+          .eq('status', 'occupied');
+
+        setStats({
+          todaySales,
+          billsCount,
+          avgBill: billsCount > 0 ? todaySales / billsCount : 0,
+          activeTables: tables?.length || 0,
+        });
+
+        // Per-branch stats for comparison
+        const perBranch = await Promise.all(
+          branches.map(async (b) => {
+            const { data: bBills } = await supabase
+              .from('bills')
+              .select('total_amount')
+              .eq('business_id', b.id)
+              .gte('created_at', today.toISOString());
+            return {
+              branchId: b.id,
+              branchName: b.branch_name || b.name,
+              city: b.city,
+              todaySales: bBills?.reduce((s, x) => s + Number(x.total_amount), 0) || 0,
+              billsCount: bBills?.length || 0,
+            };
+          })
+        );
+        setBranchStats(perBranch.sort((a, b) => b.todaySales - a.todaySales));
+        return;
+      }
+
+      // Single branch mode (existing behavior)
       const { data: bills } = await supabase
         .from('bills')
         .select('total_amount')
-        .eq('business_id', business.id)
+        .eq('business_id', business!.id)
         .gte('created_at', today.toISOString());
 
       const todaySales = bills?.reduce((sum, bill) => sum + Number(bill.total_amount), 0) || 0;
@@ -49,17 +105,16 @@ export function Dashboard() {
       const { data: tables } = await supabase
         .from('tables')
         .select('status')
-        .eq('business_id', business.id)
+        .eq('business_id', business!.id)
         .eq('status', 'occupied');
-
-      const activeTables = tables?.length || 0;
 
       setStats({
         todaySales,
         billsCount,
         avgBill,
-        activeTables,
+        activeTables: tables?.length || 0,
       });
+      setBranchStats([]);
     } catch (error) {
       console.error('Error loading dashboard stats:', error);
     } finally {
@@ -121,6 +176,37 @@ export function Dashboard() {
           </div>
         ))}
       </div>
+
+        {isAllBranches && branchStats.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Store className="w-5 h-5 text-amber-500" />
+              <h3 className="text-lg font-semibold text-gray-900">Branch Comparison — Today</h3>
+            </div>
+            <div className="space-y-3">
+              {branchStats.map((bs, idx) => {
+                const maxSales = branchStats[0].todaySales || 1;
+                return (
+                  <div key={bs.branchId}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-medium text-gray-700">
+                        {idx === 0 && <span className="text-amber-500 mr-1">#1</span>}
+                        {bs.branchName}{bs.city && <span className="text-gray-400 ml-1">· {bs.city}</span>}
+                      </span>
+                      <span className="font-semibold">₹{bs.todaySales.toLocaleString('en-IN', { maximumFractionDigits: 0 })} · {bs.billsCount} bills</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div
+                        className="bg-gradient-to-r from-amber-400 to-amber-600 h-2.5 rounded-full transition-all"
+                        style={{ width: `${(bs.todaySales / maxSales) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">

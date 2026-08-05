@@ -39,11 +39,28 @@ export interface Database {
           igst_rate: number;
           service_charge_rate: number;
           enable_service_charge: boolean;
+          brand_id: string | null;
+          branch_name: string | null;
+          branch_code: string | null;
+          city: string | null;
+          is_active: boolean;
           created_at: string;
           updated_at: string;
         };
         Insert: Omit<Database['public']['Tables']['businesses']['Row'], 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['businesses']['Insert']>;
+      };
+      brands: {
+        Row: {
+          id: string;
+          name: string;
+          logo_url: string | null;
+          owner_user_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['brands']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['brands']['Insert']>;
       };
       staff: {
         Row: {
@@ -55,6 +72,7 @@ export interface Database {
           pin: string | null;
           is_active: boolean;
           permissions: string[] | null;
+          brand_id: string | null;
           created_at: string;
         };
         Insert: Omit<Database['public']['Tables']['staff']['Row'], 'id' | 'created_at'>;

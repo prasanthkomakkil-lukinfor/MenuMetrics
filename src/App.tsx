@@ -14,6 +14,7 @@ import { Loyalty } from './pages/Loyalty';
 import { Pricing } from './pages/Pricing';
 import { Settings } from './pages/Settings';
 import { Reservations } from './pages/Reservations';
+import { Branches } from './pages/Branches';
 import { useEffect, useState } from 'react';
 
 function AppContent() {
@@ -46,6 +47,7 @@ function AppContent() {
     purchasing: <Purchasing />,
     loyalty: <Loyalty />,
     reservations: <Reservations />,
+    branches: <Branches />,
     pricing: <Pricing />,
     settings: <Settings />,
   };
