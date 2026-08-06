@@ -327,6 +327,7 @@ export interface Database {
           stock_qty: number;
           reorder_level: number;
           cost_per_unit: number;
+          category: string;
           created_at: string;
           updated_at: string;
         };
@@ -405,10 +406,31 @@ export interface Database {
           unit_cost: number;
           total_cost: number;
           received_quantity: number;
+          is_received: boolean;
+          received_at: string | null;
+          received_by: string | null;
           created_at: string;
         };
         Insert: Omit<Database['public']['Tables']['purchase_order_items']['Row'], 'id' | 'created_at'>;
         Update: Partial<Database['public']['Tables']['purchase_order_items']['Insert']>;
+      };
+      supplier_items: {
+        Row: {
+          id: string;
+          business_id: string;
+          supplier_id: string;
+          ingredient_id: string | null;
+          item_name: string;
+          unit: string;
+          unit_cost: number;
+          last_po_cost: number | null;
+          last_po_date: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['supplier_items']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['supplier_items']['Insert']>;
       };
       loyalty_transactions: {
         Row: {

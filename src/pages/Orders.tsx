@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, ChefHat, ShoppingBag, Receipt, Trash2, Minus, Users, Phone, Search, Bike } from 'lucide-react';
+import { Plus, X, ChefHat, ShoppingBag, Receipt, Trash2, Minus, Users, Phone, Search, Bike, UserCheck } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -9,6 +9,7 @@ type Order = Database['public']['Tables']['orders']['Row'];
 type Table = Database['public']['Tables']['tables']['Row'];
 type Item = Database['public']['Tables']['items']['Row'];
 type Category = Database['public']['Tables']['categories']['Row'];
+type Customer = Database['public']['Tables']['customers']['Row'];
 type OrderItem = {
   id: string;
   order_id: string;
@@ -47,6 +48,10 @@ export function Orders() {
   const [guestCount, setGuestCount] = useState(2);
   const [customerName, setCustomerName] = useState('');
   const [customerMobile, setCustomerMobile] = useState('');
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerResults, setCustomerResults] = useState<Customer[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [orderType, setOrderType] = useState<'dine_in' | 'takeaway' | 'delivery'>('dine_in');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
@@ -118,6 +123,39 @@ export function Orders() {
     }
   };
 
+  // Customer search by name or mobile
+  useEffect(() => {
+    if (!business || !customerSearch || customerSearch.length < 2) {
+      setCustomerResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('business_id', business.id)
+        .or(`name.ilike.%${customerSearch}%,mobile.ilike.%${customerSearch}%`)
+        .limit(10);
+      setCustomerResults(data || []);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [customerSearch, business]);
+
+  const selectCustomer = (c: Customer) => {
+    setCustomerId(c.id);
+    setCustomerName(c.name || '');
+    setCustomerMobile(c.mobile || '');
+    setCustomerSearch(c.name || '');
+    setShowCustomerDropdown(false);
+  };
+
+  const clearCustomer = () => {
+    setCustomerId(null);
+    setCustomerName('');
+    setCustomerMobile('');
+    setCustomerSearch('');
+  };
+
   const filteredItems = items.filter((item) => {
     const matchesCategory = selectedCategory === 'all' || item.category_id === selectedCategory;
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -135,6 +173,9 @@ export function Orders() {
     setGuestCount(2);
     setCustomerName('');
     setCustomerMobile('');
+    setCustomerId(null);
+    setCustomerSearch('');
+    setShowCustomerDropdown(false);
     setDeliveryAddress('');
     setDeliveryInstructions('');
     setDeliveryCharge('');
@@ -149,6 +190,8 @@ export function Orders() {
     setGuestCount(order.guest_count);
     setCustomerName(order.customer_name || '');
     setCustomerMobile(order.customer_mobile || '');
+    setCustomerId(order.customer_id || null);
+    setCustomerSearch(order.customer_name || order.customer_mobile || '');
     setDeliveryAddress(order.delivery_address || '');
     setDeliveryInstructions(order.delivery_instructions || '');
     setDeliveryCharge(order.delivery_charge ? String(order.delivery_charge) : '');
@@ -205,6 +248,7 @@ export function Orders() {
         order_type: orderType,
         table_id: orderType === 'dine_in' ? selectedTable?.id : null,
         token_number: tokenNumber,
+        customer_id: customerId,
         customer_name: customerName || null,
         customer_mobile: customerMobile || null,
         staff_id: staff.id,
@@ -736,25 +780,82 @@ export function Orders() {
                         />
                       </div>
                     )}
-                    <div>
-                      <label className="text-xs text-gray-500 font-medium">Customer Name</label>
-                      <input
-                        type="text"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="Optional"
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 font-medium">Mobile</label>
-                      <input
-                        type="tel"
-                        value={customerMobile}
-                        onChange={(e) => setCustomerMobile(e.target.value)}
-                        placeholder="Optional"
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                      />
+                    <div className="col-span-2">
+                      <label className="text-xs text-gray-500 font-medium">Customer Search (Name or Mobile)</label>
+                      <div className="relative">
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                              type="text"
+                              value={customerSearch}
+                              onChange={(e) => {
+                                setCustomerSearch(e.target.value);
+                                setShowCustomerDropdown(true);
+                                if (!e.target.value) { setCustomerId(null); setCustomerName(''); setCustomerMobile(''); }
+                              }}
+                              onFocus={() => setShowCustomerDropdown(true)}
+                              placeholder="Search by name or mobile..."
+                              className="w-full pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                            />
+                          </div>
+                          {customerId && (
+                            <button onClick={clearCustomer} className="px-2 py-1.5 text-xs bg-green-50 text-green-700 hover:bg-green-100 rounded-lg font-medium flex items-center gap-1">
+                              <UserCheck className="w-3.5 h-3.5" /> Linked
+                            </button>
+                          )}
+                        </div>
+                        {showCustomerDropdown && customerResults.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-48 overflow-y-auto">
+                            {customerResults.map((c) => (
+                              <button
+                                key={c.id}
+                                onClick={() => selectCustomer(c)}
+                                className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-gray-50 text-left transition-colors border-b border-gray-100 last:border-0"
+                              >
+                                <div>
+                                  <p className="font-medium text-gray-900">{c.name}</p>
+                                  <p className="text-xs text-gray-500">{c.mobile || 'No mobile'}</p>
+                                </div>
+                                <div className="text-right">
+                                  {c.loyalty_tier && (
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                      c.loyalty_tier === 'gold' ? 'bg-amber-100 text-amber-700' :
+                                      c.loyalty_tier === 'silver' ? 'bg-gray-200 text-gray-700' : 'bg-orange-100 text-orange-700'
+                                    }`}>
+                                      {c.loyalty_tier}
+                                    </span>
+                                  )}
+                                  <p className="text-xs text-gray-400 mt-0.5">{c.loyalty_points || 0} pts</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {showCustomerDropdown && customerSearch.length >= 2 && customerResults.length === 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-50 p-3">
+                            <p className="text-sm text-gray-500">No existing customer found. A new customer will be created.</p>
+                          </div>
+                        )}
+                      </div>
+                      {customerId && (
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={customerName}
+                            onChange={(e) => setCustomerName(e.target.value)}
+                            placeholder="Name"
+                            className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                          />
+                          <input
+                            type="tel"
+                            value={customerMobile}
+                            onChange={(e) => setCustomerMobile(e.target.value)}
+                            placeholder="Mobile"
+                            className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                   {orderType === 'delivery' && (

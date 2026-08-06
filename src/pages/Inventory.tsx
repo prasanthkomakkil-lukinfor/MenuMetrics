@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Package, AlertTriangle, TrendingDown, Boxes, Trash2, Edit, ArrowDownUp } from 'lucide-react';
+import { Plus, X, Package, TriangleAlert as AlertTriangle, TrendingDown, Boxes, Trash2, CreditCard as Edit, ArrowDownUp } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -10,6 +10,7 @@ type StockMovement = Database['public']['Tables']['stock_movements']['Row'];
 type Item = Database['public']['Tables']['items']['Row'];
 
 const units = ['kg', 'g', 'litre', 'ml', 'piece', 'dozen', 'pack'];
+const defaultCategories = ['veg', 'non_veg', 'beverages', 'assets', 'ingredient'];
 
 export function Inventory() {
   const { business, staff } = useAuth();
@@ -24,6 +25,10 @@ export function Inventory() {
   const [adjustType, setAdjustType] = useState<'purchase' | 'wastage' | 'adjustment'>('purchase');
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -31,6 +36,7 @@ export function Inventory() {
     stock_qty: '',
     reorder_level: '',
     cost_per_unit: '',
+    category: 'ingredient',
   });
 
   const loadData = useCallback(async () => {
@@ -44,6 +50,9 @@ export function Inventory() {
       setIngredients(ingRes.data || []);
       setItems(itemRes.data || []);
       setMovements(movRes.data || []);
+      const cats = new Set<string>();
+      (ingRes.data || []).forEach((ing) => { if (ing.category && !defaultCategories.includes(ing.category)) cats.add(ing.category); });
+      setCustomCategories(Array.from(cats));
     } catch (error) {
       console.error('Error loading inventory:', error);
     } finally {
@@ -55,13 +64,15 @@ export function Inventory() {
     loadData();
   }, [loadData]);
 
-  const lowStockItems = ingredients.filter((i) => i.reorder_level > 0 && i.stock_qty <= i.reorder_level);
-  const totalStockValue = ingredients.reduce((sum, i) => sum + i.stock_qty * i.cost_per_unit, 0);
+  const allCategories = [...defaultCategories, ...customCategories];
+  const filteredIngredients = categoryFilter === 'all' ? ingredients : ingredients.filter((i) => i.category === categoryFilter);
+  const lowStockItems = filteredIngredients.filter((i) => i.reorder_level > 0 && i.stock_qty <= i.reorder_level);
+  const totalStockValue = filteredIngredients.reduce((sum, i) => sum + i.stock_qty * i.cost_per_unit, 0);
   const outOfStockMenuItems = items.filter((i) => i.is_sold_out);
 
   const openAdd = () => {
     setEditingIngredient(null);
-    setForm({ name: '', unit: 'kg', stock_qty: '', reorder_level: '', cost_per_unit: '' });
+    setForm({ name: '', unit: 'kg', stock_qty: '', reorder_level: '', cost_per_unit: '', category: categoryFilter !== 'all' ? categoryFilter : 'ingredient' });
     setShowModal(true);
   };
 
@@ -73,6 +84,7 @@ export function Inventory() {
       stock_qty: String(ing.stock_qty),
       reorder_level: String(ing.reorder_level),
       cost_per_unit: String(ing.cost_per_unit),
+      category: ing.category || 'ingredient',
     });
     setShowModal(true);
   };
@@ -91,6 +103,7 @@ export function Inventory() {
         stock_qty: parseFloat(form.stock_qty) || 0,
         reorder_level: parseFloat(form.reorder_level) || 0,
         cost_per_unit: parseFloat(form.cost_per_unit) || 0,
+        category: form.category,
       };
 
       if (editingIngredient) {
@@ -243,18 +256,54 @@ export function Inventory() {
       ) : tab === 'ingredients' ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Ingredients</h2>
-            <button
-              onClick={openAdd}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Ingredient
-            </button>
+            <h2 className="text-lg font-semibold text-gray-900">Items</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCategoryModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                New Category
+              </button>
+              <button
+                onClick={openAdd}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Item
+              </button>
+            </div>
           </div>
 
-          {ingredients.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No ingredients yet. Add your first ingredient to start tracking stock.</p>
+          {/* Category filter pills */}
+          <div className="flex gap-2 flex-wrap mb-4">
+            <button
+              onClick={() => setCategoryFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                categoryFilter === 'all' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              All ({ingredients.length})
+            </button>
+            {allCategories.map((cat) => {
+              const count = ingredients.filter((i) => i.category === cat).length;
+              if (count === 0 && !defaultCategories.includes(cat)) return null;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize ${
+                    categoryFilter === cat ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {cat.replace('_', ' ')} ({count})
+                </button>
+              );
+            })}
+          </div>
+
+          {filteredIngredients.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No items in this category. Add your first item to start tracking stock.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -271,7 +320,7 @@ export function Inventory() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ingredients.map((ing) => {
+                  {filteredIngredients.map((ing) => {
                     const isLow = ing.reorder_level > 0 && ing.stock_qty <= ing.reorder_level;
                     return (
                       <tr key={ing.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -435,6 +484,18 @@ export function Inventory() {
                   placeholder="e.g. Tomatoes"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                >
+                  {allCategories.map((cat) => (
+                    <option key={cat} value={cat} className="capitalize">{cat.replace('_', ' ')}</option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
@@ -485,6 +546,57 @@ export function Inventory() {
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">Cancel</button>
                 <button onClick={saveIngredient} className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold">{editingIngredient ? 'Update' : 'Add'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Category Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Create New Category</h2>
+              <button onClick={() => setShowCategoryModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category Name</label>
+                <input
+                  type="text"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value.toLowerCase().replace(/\s+/g, '_'))}
+                  placeholder="e.g. spices, dairy, cleaning"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+              {allCategories.length > 0 && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-2">Existing categories:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {allCategories.map((cat) => (
+                      <span key={cat} className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full capitalize">{cat.replace('_', ' ')}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setShowCategoryModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">Cancel</button>
+                <button
+                  onClick={() => {
+                    if (!newCategory) { alert('Category name is required'); return; }
+                    if (allCategories.includes(newCategory)) { alert('Category already exists'); return; }
+                    setCustomCategories([...customCategories, newCategory]);
+                    setNewCategory('');
+                    setShowCategoryModal(false);
+                  }}
+                  className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold"
+                >
+                  Create Category
+                </button>
               </div>
             </div>
           </div>

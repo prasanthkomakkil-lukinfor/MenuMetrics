@@ -150,21 +150,41 @@ export function Billing() {
         } as never)
         .eq('id', selectedBill.id);
 
-      if (newStatus === 'paid' && selectedBill.order?.table_id) {
-        await supabase
-          .from('tables')
-          .update({ status: 'free' } as never)
-          .eq('id', selectedBill.order.table_id);
+      if (newStatus === 'paid') {
+        if (selectedBill.order?.table_id) {
+          await supabase
+            .from('tables')
+            .update({ status: 'free' } as never)
+            .eq('id', selectedBill.order.table_id);
+        }
+        if (selectedBill.order?.id) {
+          await supabase
+            .from('orders')
+            .update({ status: 'completed' } as never)
+            .eq('id', selectedBill.order.id);
+        }
       }
 
       // Award loyalty points + enrich customer on full payment
-      if (newStatus === 'paid' && selectedBill.order?.customer_mobile) {
-        const { data: customer } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('business_id', business.id)
-          .eq('mobile', selectedBill.order.customer_mobile)
-          .maybeSingle();
+      if (newStatus === 'paid' && selectedBill.order) {
+        let customer: Database['public']['Tables']['customers']['Row'] | null = null;
+        if (selectedBill.order.customer_id) {
+          const { data: cById } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('id', selectedBill.order.customer_id)
+            .maybeSingle();
+          customer = cById;
+        }
+        if (!customer && selectedBill.order.customer_mobile) {
+          const { data: cByMobile } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('business_id', business.id)
+            .eq('mobile', selectedBill.order.customer_mobile)
+            .maybeSingle();
+          customer = cByMobile;
+        }
 
         if (customer) {
           const pointsPerRupee = Number(business.loyalty_points_per_rupee) || 0.1;
