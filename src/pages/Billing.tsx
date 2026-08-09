@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Printer, Share2, DollarSign, CircleCheck as CheckCircle, Tag, CreditCard, X, Receipt } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Printer, Share2, DollarSign, CircleCheck as CheckCircle, Tag, CreditCard, X, Receipt, FileText, Receipt as ReceiptIcon } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -40,6 +40,9 @@ export function Billing() {
   const [discountAmount, setDiscountAmount] = useState('');
   const [discountPercent, setDiscountPercent] = useState('');
   const [savingDiscount, setSavingDiscount] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printFormat, setPrintFormat] = useState<'a4' | 'thermal'>('a4');
+  const printWindowRef = useRef<Window | null>(null);
 
   const loadBills = useCallback(async () => {
     if (!business) return;
@@ -284,8 +287,110 @@ export function Billing() {
     }
   };
 
+  const generatePrintHTML = (format: 'a4' | 'thermal') => {
+    if (!selectedBill || !business) return '';
+
+    const isThermal = format === 'thermal';
+    const pageWidth = isThermal ? '80mm' : '210mm';
+    const fontFamily = isThermal
+      ? "'Courier New', monospace"
+      : "'Inter', -apple-system, sans-serif";
+    const baseFontSize = isThermal ? '11px' : '14px';
+    const titleSize = isThermal ? '14px' : '22px';
+    const padding = isThermal ? '4mm' : '15mm';
+
+    const itemsHTML = orderItems.map((item) => `
+      <tr>
+        <td style="padding: ${isThermal ? '1px 0' : '6px 0'};">${item.quantity}× ${item.item_name}</td>
+        <td style="text-align:right; padding: ${isThermal ? '1px 0' : '6px 0'};">₹${Number(item.total_price).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const paymentsHTML = payments.length > 0
+      ? `<div style="margin-top: 8px; border-top: 1px dashed #999; padding-top: 6px;">
+          <p style="font-size: ${isThermal ? '9px' : '12px'}; font-weight: 600; margin-bottom: 4px;">Payments</p>
+          ${payments.map((p) => `<div style="display:flex; justify-content:space-between; font-size:${isThermal ? '9px' : '12px'};"><span>${p.payment_mode.toUpperCase()}${p.card_type ? ' · ' + p.card_type : ''}${p.card_last_4 ? ' · ****' + p.card_last_4 : ''}</span><span>₹${Number(p.amount).toFixed(2)}</span></div>`).join('')}
+        </div>`
+      : '';
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Invoice ${selectedBill.bill_number}</title>
+<style>
+  @page { size: ${pageWidth} auto; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: ${fontFamily}; font-size: ${baseFontSize}; color: #111; padding: ${padding}; width: ${pageWidth}; }
+  .header { text-align: center; margin-bottom: 10px; }
+  .header h1 { font-size: ${titleSize}; font-weight: 700; }
+  .header p { font-size: ${isThermal ? '9px' : '12px'}; color: #555; margin-top: 2px; }
+  .bill-info { display: flex; justify-content: space-between; font-size: ${isThermal ? '9px' : '12px'}; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  .order-type { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: ${isThermal ? '8px' : '11px'}; font-weight: 600; margin: 4px 0; }
+  .customer-info { font-size: ${isThermal ? '9px' : '12px'}; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  tr { border-bottom: ${isThermal ? '1px dashed #eee' : '1px solid #f0f0f0'}; }
+  .summary { margin-top: 8px; border-top: ${isThermal ? '1px dashed #999' : '2px solid #333'}; padding-top: 6px; }
+  .summary-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: ${isThermal ? '10px' : '13px'}; }
+  .total-row { font-weight: 700; font-size: ${isThermal ? '13px' : '16px'}; border-top: 1px solid #333; margin-top: 4px; padding-top: 4px; }
+  .footer { text-align: center; margin-top: 12px; font-size: ${isThermal ? '9px' : '12px'}; color: #666; }
+  @media print { body { width: ${pageWidth}; } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>${business.name}</h1>
+    ${business.address ? `<p>${business.address}</p>` : ''}
+    ${business.phone ? `<p>Phone: ${business.phone}</p>` : ''}
+    ${business.gst_number ? `<p>GST: ${business.gst_number}</p>` : ''}
+  </div>
+  <div class="bill-info">
+    <span>Bill #${selectedBill.bill_number}</span>
+    <span>${new Date(selectedBill.created_at).toLocaleString()}</span>
+  </div>
+  ${selectedBill.order?.order_type === 'dine_in' && tableInfo ? `<div class="order-type" style="background:#dbeafe; color:#1e40af;">Table ${tableInfo.table_number} · ${tableInfo.capacity} seats</div>` : ''}
+  ${selectedBill.order?.order_type === 'takeaway' ? `<div class="order-type" style="background:#f3e8ff; color:#6b21a8;">Takeaway</div>` : ''}
+  ${selectedBill.order?.order_type === 'delivery' ? `<div class="order-type" style="background:#ffedd5; color:#9a3412;">Delivery</div>` : ''}
+  ${selectedBill.order?.delivery_address ? `<div class="customer-info"><strong>Delivery Address:</strong> ${selectedBill.order.delivery_address}</div>` : ''}
+  ${selectedBill.order?.customer_name ? `<div class="customer-info"><strong>Customer:</strong> ${selectedBill.order.customer_name}</div>` : ''}
+  ${selectedBill.order?.customer_mobile ? `<div class="customer-info"><strong>Mobile:</strong> ${selectedBill.order.customer_mobile}</div>` : ''}
+  <table>
+    ${itemsHTML}
+  </table>
+  <div class="summary">
+    <div class="summary-row"><span>Subtotal</span><span>₹${Number(selectedBill.subtotal).toFixed(2)}</span></div>
+    ${Number(selectedBill.discount_amount) > 0 ? `<div class="summary-row"><span>Discount</span><span style="color:#dc2626;">-₹${Number(selectedBill.discount_amount).toFixed(2)}</span></div>` : ''}
+    <div class="summary-row"><span>CGST</span><span>₹${Number(selectedBill.cgst_amount).toFixed(2)}</span></div>
+    <div class="summary-row"><span>SGST</span><span>₹${Number(selectedBill.sgst_amount).toFixed(2)}</span></div>
+    ${selectedBill.order?.order_type === 'delivery' && Number(selectedBill.order?.delivery_charge || 0) > 0 ? `<div class="summary-row"><span>Delivery Charge</span><span>₹${Number(selectedBill.order.delivery_charge).toFixed(2)}</span></div>` : ''}
+    <div class="summary-row total-row"><span>Total</span><span>₹${Number(selectedBill.total_amount).toFixed(2)}</span></div>
+    <div class="summary-row" style="color:#16a34a;"><span>Paid</span><span>₹${Number(selectedBill.paid_amount).toFixed(2)}</span></div>
+    ${pendingAmount > 0 ? `<div class="summary-row" style="font-weight:600; color:#ca8a04;"><span>Balance Due</span><span>₹${pendingAmount.toFixed(2)}</span></div>` : ''}
+    ${paymentsHTML}
+  </div>
+  <div class="footer">
+    <p>Thank you for visiting ${business.name}!</p>
+    <p style="margin-top:4px;">${business.gst_number ? 'Tax Invoice · ' : ''}Powered by Restaurant POS</p>
+  </div>
+</body>
+</html>`;
+  };
+
   const printBill = () => {
-    window.print();
+    if (!selectedBill) return;
+    const html = generatePrintHTML(printFormat);
+    const win = window.open('', '_blank', 'width=400,height=600');
+    if (!win) {
+      alert('Please allow popups to print bills.');
+      return;
+    }
+    printWindowRef.current = win;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+    }, 500);
   };
 
   return (
@@ -529,7 +634,7 @@ export function Billing() {
                   </>
                 )}
                 <button
-                  onClick={printBill}
+                  onClick={() => setShowPrintModal(true)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors"
                 >
                   <Printer className="w-4 h-4" />
@@ -789,6 +894,62 @@ export function Billing() {
                   {savingDiscount ? 'Applying...' : 'Apply Discount'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print Format Modal */}
+      {showPrintModal && selectedBill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Print Bill</h2>
+              <button onClick={() => setShowPrintModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Choose your printer format. The browser print dialog will let you select the actual printer.</p>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <button
+                onClick={() => setPrintFormat('a4')}
+                className={`p-4 rounded-xl border-2 transition-all text-left ${
+                  printFormat === 'a4'
+                    ? 'border-amber-500 bg-amber-50'
+                    : 'border-gray-200 hover:border-amber-300'
+                }`}
+              >
+                <FileText className={`w-7 h-7 mb-2 ${printFormat === 'a4' ? 'text-amber-500' : 'text-gray-400'}`} />
+                <p className="font-semibold text-gray-900">A4 Sheet</p>
+                <p className="text-xs text-gray-500">Laser / inkjet printer</p>
+              </button>
+              <button
+                onClick={() => setPrintFormat('thermal')}
+                className={`p-4 rounded-xl border-2 transition-all text-left ${
+                  printFormat === 'thermal'
+                    ? 'border-amber-500 bg-amber-50'
+                    : 'border-gray-200 hover:border-amber-300'
+                }`}
+              >
+                <ReceiptIcon className={`w-7 h-7 mb-2 ${printFormat === 'thermal' ? 'text-amber-500' : 'text-gray-400'}`} />
+                <p className="font-semibold text-gray-900">Thermal 80mm</p>
+                <p className="text-xs text-gray-500">Receipt printer</p>
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPrintModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowPrintModal(false); printBill(); }}
+                className="flex-1 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold flex items-center justify-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                Print
+              </button>
             </div>
           </div>
         </div>
