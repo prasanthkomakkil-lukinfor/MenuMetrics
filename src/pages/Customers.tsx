@@ -27,6 +27,12 @@ export function Customers() {
     email: '',
     birthday: '',
     anniversary: '',
+    delivery_flat: '',
+    delivery_building: '',
+    delivery_road: '',
+    delivery_block: '',
+    delivery_landmark: '',
+    delivery_area: '',
   });
 
   useEffect(() => {
@@ -65,7 +71,7 @@ export function Customers() {
 
   const openAddModal = () => {
     setEditingCustomer(null);
-    setFormData({ name: '', mobile: '', email: '', birthday: '', anniversary: '' });
+    setFormData({ name: '', mobile: '', email: '', birthday: '', anniversary: '', delivery_flat: '', delivery_building: '', delivery_road: '', delivery_block: '', delivery_landmark: '', delivery_area: '' });
     setShowModal(true);
   };
 
@@ -77,6 +83,12 @@ export function Customers() {
       email: customer.email || '',
       birthday: customer.birthday || '',
       anniversary: customer.anniversary || '',
+      delivery_flat: customer.delivery_flat || '',
+      delivery_building: customer.delivery_building || '',
+      delivery_road: customer.delivery_road || '',
+      delivery_block: customer.delivery_block || '',
+      delivery_landmark: customer.delivery_landmark || '',
+      delivery_area: customer.delivery_area || '',
     });
     setShowModal(true);
   };
@@ -93,6 +105,12 @@ export function Customers() {
         email: formData.email || null,
         birthday: formData.birthday || null,
         anniversary: formData.anniversary || null,
+        delivery_flat: formData.delivery_flat || null,
+        delivery_building: formData.delivery_building || null,
+        delivery_road: formData.delivery_road || null,
+        delivery_block: formData.delivery_block || null,
+        delivery_landmark: formData.delivery_landmark || null,
+        delivery_area: formData.delivery_area || null,
       };
 
       if (editingCustomer) {
@@ -321,6 +339,73 @@ export function Customers() {
                   />
                 </div>
               </div>
+
+              <div className="border-t border-gray-200 pt-4 mt-2">
+                <p className="text-sm font-semibold text-gray-900 mb-3">Delivery Address</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Flat / Villa No.</label>
+                    <input
+                      type="text"
+                      value={formData.delivery_flat}
+                      onChange={(e) => setFormData({ ...formData, delivery_flat: e.target.value })}
+                      placeholder="Flat 101"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Building Name</label>
+                    <input
+                      type="text"
+                      value={formData.delivery_building}
+                      onChange={(e) => setFormData({ ...formData, delivery_building: e.target.value })}
+                      placeholder="Green Residency"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Road / Street</label>
+                    <input
+                      type="text"
+                      value={formData.delivery_road}
+                      onChange={(e) => setFormData({ ...formData, delivery_road: e.target.value })}
+                      placeholder="MG Road"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Block</label>
+                    <input
+                      type="text"
+                      value={formData.delivery_block}
+                      onChange={(e) => setFormData({ ...formData, delivery_block: e.target.value })}
+                      placeholder="Block A"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Landmark</label>
+                    <input
+                      type="text"
+                      value={formData.delivery_landmark}
+                      onChange={(e) => setFormData({ ...formData, delivery_landmark: e.target.value })}
+                      placeholder="Near City Mall"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Area / Locality</label>
+                    <input
+                      type="text"
+                      value={formData.delivery_area}
+                      onChange={(e) => setFormData({ ...formData, delivery_area: e.target.value })}
+                      placeholder="Koramangala"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"

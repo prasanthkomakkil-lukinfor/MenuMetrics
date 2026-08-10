@@ -44,6 +44,15 @@ export interface Database {
           branch_code: string | null;
           city: string | null;
           is_active: boolean;
+          whatsapp_enabled: boolean;
+          whatsapp_api_key: string | null;
+          whatsapp_phone_number_id: string | null;
+          whatsapp_sender_number: string | null;
+          whatsapp_template_placed: string | null;
+          whatsapp_template_preparing: string | null;
+          whatsapp_template_ready: string | null;
+          whatsapp_template_review: string | null;
+          google_review_link: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -192,6 +201,12 @@ export interface Database {
           email: string | null;
           birthday: string | null;
           anniversary: string | null;
+          delivery_flat: string | null;
+          delivery_building: string | null;
+          delivery_road: string | null;
+          delivery_block: string | null;
+          delivery_landmark: string | null;
+          delivery_area: string | null;
           total_visits: number;
           total_spent: number;
           loyalty_points: number;

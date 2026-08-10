@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Printer, Share2, DollarSign, CircleCheck as CheckCircle, Tag, CreditCard, X, Receipt, FileText, Receipt as ReceiptIcon } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
@@ -42,7 +42,6 @@ export function Billing() {
   const [savingDiscount, setSavingDiscount] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printFormat, setPrintFormat] = useState<'a4' | 'thermal'>('a4');
-  const printWindowRef = useRef<Window | null>(null);
 
   const loadBills = useCallback(async () => {
     if (!business) return;
@@ -379,18 +378,35 @@ export function Billing() {
   const printBill = () => {
     if (!selectedBill) return;
     const html = generatePrintHTML(printFormat);
-    const win = window.open('', '_blank', 'width=400,height=600');
-    if (!win) {
-      alert('Please allow popups to print bills.');
-      return;
-    }
-    printWindowRef.current = win;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => {
-      win.print();
-    }, 500);
+
+    const existing = document.getElementById('print-frame');
+    if (existing) existing.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => iframe.remove(), 1000);
+      } catch {
+        iframe.remove();
+      }
+    };
   };
 
   return (
