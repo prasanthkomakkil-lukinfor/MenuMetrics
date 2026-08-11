@@ -354,12 +354,34 @@ export interface Database {
           id: string;
           business_id: string;
           item_id: string;
-          ingredient_id: string;
-          quantity_needed: number;
+          name: string;
+          description: string | null;
+          yield_quantity: number;
+          yield_unit: string;
+          prep_time_minutes: number;
+          cook_time_minutes: number;
+          total_cost: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['recipes']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Database['public']['Tables']['recipes']['Insert']>;
+      };
+      recipe_ingredients: {
+        Row: {
+          id: string;
+          recipe_id: string;
+          ingredient_name: string;
+          quantity: number;
+          unit: string;
+          cost_per_unit: number;
+          total_cost: number;
+          ingredient_id: string | null;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['recipes']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['recipes']['Insert']>;
+        Insert: Omit<Database['public']['Tables']['recipe_ingredients']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['recipe_ingredients']['Insert']>;
       };
       stock_movements: {
         Row: {

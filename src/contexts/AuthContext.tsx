@@ -91,6 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select('*')
         .eq('user_id', userId)
         .eq('is_active', true)
+        .order('created_at')
+        .limit(1)
         .maybeSingle();
 
       if (staffError) throw staffError;

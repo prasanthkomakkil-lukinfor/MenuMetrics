@@ -1,4 +1,8 @@
 import { Check, Sparkles, Award, Crown, Building2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Layout } from '../components/Layout';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface PlanFeature {
   name: string;
@@ -35,9 +39,44 @@ const features: PlanFeature[] = [
   { name: 'Dedicated support + SLA', starter: false, growth: false, pro: false, enterprise: true },
 ];
 
+const planKeys = ['starter', 'growth', 'pro', 'enterprise'] as const;
+type PlanKey = typeof planKeys[number];
+
 export function Pricing() {
+  const { business } = useAuth();
+  const [currentPlan, setCurrentPlan] = useState<string>('pro');
+  const [selecting, setSelecting] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (business?.plan) {
+      setCurrentPlan(business.plan);
+    }
+  }, [business]);
+
+  const handleSelectPlan = async (planKey: string) => {
+    if (!business || planKey === currentPlan) return;
+    setSelecting(planKey);
+    try {
+      const { error } = await supabase
+        .from('businesses')
+        .update({ plan: planKey } as never)
+        .eq('id', business.id);
+      if (error) throw error;
+      setCurrentPlan(planKey);
+      setConfirmed(true);
+      setTimeout(() => setConfirmed(false), 3000);
+    } catch (error) {
+      console.error('Error updating plan:', error);
+      alert('Failed to update plan. Please try again.');
+    } finally {
+      setSelecting(null);
+    }
+  };
+
   const plans = [
     {
+      key: 'starter' as PlanKey,
       name: 'Starter',
       price: '₹999',
       period: '/month',
@@ -49,6 +88,7 @@ export function Pricing() {
       popular: false,
     },
     {
+      key: 'growth' as PlanKey,
       name: 'Growth',
       price: '₹1,999',
       period: '/month',
@@ -60,6 +100,7 @@ export function Pricing() {
       popular: false,
     },
     {
+      key: 'pro' as PlanKey,
       name: 'Pro',
       price: '₹3,499',
       period: '/month',
@@ -71,20 +112,21 @@ export function Pricing() {
       popular: true,
     },
     {
+      key: 'enterprise' as PlanKey,
       name: 'Enterprise',
       price: 'Custom',
       period: '',
       description: 'Chains, multi-branch & cloud kitchens',
       icon: Building2,
-      color: 'from-purple-500 to-purple-600',
-      borderColor: 'border-purple-200',
-      buttonClass: 'bg-purple-600 hover:bg-purple-700',
+      color: 'from-teal-500 to-teal-600',
+      borderColor: 'border-teal-200',
+      buttonClass: 'bg-teal-600 hover:bg-teal-700',
       popular: false,
     },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <Layout>
       <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
@@ -97,37 +139,65 @@ export function Pricing() {
             <Sparkles className="w-5 h-5" />
             <span className="font-semibold">14-day free trial on all plans • No credit card required</span>
           </div>
+          {confirmed && (
+            <div className="mt-4 inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 px-6 py-3 rounded-full">
+              <Check className="w-5 h-5" />
+              <span className="font-semibold">Plan updated successfully!</span>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-          {plans.map((plan) => (
-            <div
-              key={plan.name}
-              className={`bg-white rounded-2xl shadow-lg border-2 ${plan.borderColor} overflow-hidden ${
-                plan.popular ? 'ring-4 ring-amber-200 transform scale-105' : ''
-              } transition-transform hover:scale-105`}
-            >
-              {plan.popular && (
-                <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-center py-2 text-sm font-semibold">
-                  Most Popular
+          {plans.map((plan) => {
+            const isCurrent = currentPlan === plan.key;
+            const isSelecting = selecting === plan.key;
+            return (
+              <div
+                key={plan.key}
+                className={`bg-white rounded-2xl shadow-lg border-2 ${plan.borderColor} overflow-hidden ${
+                  plan.popular ? 'ring-4 ring-amber-200 transform scale-105' : ''
+                } transition-transform hover:scale-105`}
+              >
+                {plan.popular && (
+                  <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-center py-2 text-sm font-semibold">
+                    Most Popular
+                  </div>
+                )}
+                <div className="p-6">
+                  <div className={`w-12 h-12 bg-gradient-to-br ${plan.color} rounded-xl flex items-center justify-center mb-4`}>
+                    <plan.icon className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
+                  <p className="text-gray-600 text-sm mb-6 h-12">{plan.description}</p>
+                  <div className="mb-6">
+                    <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
+                    {plan.period && <span className="text-gray-600">{plan.period}</span>}
+                  </div>
+                  <button
+                    onClick={() => handleSelectPlan(plan.key)}
+                    disabled={isCurrent || isSelecting}
+                    className={`w-full ${
+                      isCurrent
+                        ? 'bg-green-100 text-green-700 border-2 border-green-300 cursor-default'
+                        : `${plan.buttonClass} text-white font-semibold`
+                    } py-3 px-4 rounded-lg transition-colors disabled:opacity-50`}
+                  >
+                    {isCurrent ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Check className="w-5 h-5" /> Current Plan
+                      </span>
+                    ) : isSelecting ? (
+                      'Updating...'
+                    ) : plan.name === 'Enterprise' ? (
+                      'Contact Sales'
+                    ) : (
+                      'Select Plan'
+                    )}
+                  </button>
                 </div>
-              )}
-              <div className="p-6">
-                <div className={`w-12 h-12 bg-gradient-to-br ${plan.color} rounded-xl flex items-center justify-center mb-4`}>
-                  <plan.icon className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                <p className="text-gray-600 text-sm mb-6 h-12">{plan.description}</p>
-                <div className="mb-6">
-                  <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
-                  {plan.period && <span className="text-gray-600">{plan.period}</span>}
-                </div>
-                <button className={`w-full ${plan.buttonClass} text-white font-semibold py-3 px-4 rounded-lg transition-colors`}>
-                  Start Free Trial
-                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-12">
@@ -149,18 +219,10 @@ export function Pricing() {
                 {features.map((feature, idx) => (
                   <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 text-gray-700">{feature.name}</td>
-                    <td className="py-3 px-4 text-center">
-                      {renderFeatureValue(feature.starter)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {renderFeatureValue(feature.growth)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {renderFeatureValue(feature.pro)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {renderFeatureValue(feature.enterprise)}
-                    </td>
+                    <td className="py-3 px-4 text-center">{renderFeatureValue(feature.starter)}</td>
+                    <td className="py-3 px-4 text-center">{renderFeatureValue(feature.growth)}</td>
+                    <td className="py-3 px-4 text-center">{renderFeatureValue(feature.pro)}</td>
+                    <td className="py-3 px-4 text-center">{renderFeatureValue(feature.enterprise)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -196,7 +258,7 @@ export function Pricing() {
           </div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 
