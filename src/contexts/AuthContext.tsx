@@ -86,16 +86,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserData = async (userId: string, retries = 3) => {
     try {
-      const { data: staffData, error: staffError } = await supabase
+      const { data: staffRecords, error: staffError } = await supabase
         .from('staff')
         .select('*')
         .eq('user_id', userId)
         .eq('is_active', true)
-        .order('created_at')
-        .limit(1)
-        .maybeSingle();
+        .order('created_at');
 
       if (staffError) throw staffError;
+
+      const staffData = staffRecords && staffRecords.length > 0 ? staffRecords[0] : null;
+      const allStaffRecords = staffRecords || [];
 
       if (!staffData && retries > 0) {
         await new Promise(r => setTimeout(r, 1000));
@@ -105,12 +106,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStaff(staffData);
 
       if (staffData) {
-        // If staff has a brand_id, load all branches under that brand
-        if (staffData.brand_id) {
+        // Check all staff records for a brand_id (user may have staff rows in multiple branches)
+        const brandStaffRecord = allStaffRecords.find((s: any) => s.brand_id);
+        const brandId = brandStaffRecord?.brand_id || staffData.brand_id;
+
+        if (brandId) {
+          // Brand mode: load all branches under this brand
           const { data: brandData } = await supabase
             .from('brands')
             .select('*')
-            .eq('id', staffData.brand_id)
+            .eq('id', brandId)
             .maybeSingle();
 
           setBrand(brandData);
@@ -118,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { data: branchList } = await supabase
             .from('businesses')
             .select('*')
-            .eq('brand_id', staffData.brand_id)
+            .eq('brand_id', brandId)
             .order('branch_name');
 
           const activeBranches = (branchList || []).filter((b) => b.is_active);
@@ -140,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setBusiness(null);
           }
         } else {
-          // Single-branch mode (existing behavior)
+          // Single-branch mode: user has no brand, only sees their own branch
           const { data: businessData, error: businessError } = await supabase
             .from('businesses')
             .select('*')

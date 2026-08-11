@@ -172,12 +172,12 @@ export function Dashboard() {
         });
       }
 
-      // 3. Low stock alert
+      // 3. Low stock alert (use ingredients table)
       const { data: lowStockItems } = await supabase
-        .from('inventory_items')
-        .select('name, quantity, unit, min_stock_level')
+        .from('ingredients')
+        .select('name, stock_qty, unit, reorder_level')
         .in('business_id', businessIds)
-        .lt('quantity', 10);
+        .lt('stock_qty', 10);
       if (lowStockItems && lowStockItems.length > 0) {
         const names = lowStockItems.slice(0, 3).map((i: { name: string }) => i.name).join(', ');
         generatedInsights.push({
@@ -194,7 +194,58 @@ export function Dashboard() {
         });
       }
 
-      // 5. Branch comparison insight
+      // 5. Purchase order insights
+      const { data: purchaseOrders } = await supabase
+        .from('purchase_orders')
+        .select('id, status, total_amount')
+        .in('business_id', businessIds)
+        .gte('created_at', todayISO);
+      if (purchaseOrders && purchaseOrders.length > 0) {
+        const totalPurchase = purchaseOrders.reduce((s: number, po: any) => s + Number(po.total_amount || 0), 0);
+        const pending = purchaseOrders.filter((po: any) => po.status === 'pending' || po.status === 'sent').length;
+        generatedInsights.push({
+          type: 'info',
+          message: `You placed ${purchaseOrders.length} purchase order(s) today totaling ₹${totalPurchase.toLocaleString('en-IN', { maximumFractionDigits: 0 })}${pending > 0 ? `. ${pending} order(s) pending delivery.` : '.'}`,
+        });
+      }
+
+      // 6. Cost vs Revenue analysis
+      if (billsCount > 0 && orderIds.length > 0) {
+        const { data: allRecipes } = await supabase
+          .from('recipes')
+          .select('item_id, total_cost')
+          .in('business_id', businessIds);
+        const { data: oiData } = await supabase
+          .from('order_items')
+          .select('item_id, quantity, total_price')
+          .in('order_id', orderIds);
+        const recipeCostMap = new Map<string, number>();
+        (allRecipes || []).forEach((r: any) => recipeCostMap.set(r.item_id, Number(r.total_cost || 0)));
+        let totalCost = 0;
+        let totalRevenue = 0;
+        (oiData || []).forEach((oi: any) => {
+          const cost = recipeCostMap.get(oi.item_id) || 0;
+          const qty = Number(oi.quantity) || 1;
+          totalCost += cost * qty;
+          totalRevenue += Number(oi.total_price) || 0;
+        });
+        if (totalRevenue > 0) {
+          const foodCostPct = (totalCost / totalRevenue) * 100;
+          if (foodCostPct > 40) {
+            generatedInsights.push({
+              type: 'warning',
+              message: `Your food cost ratio today is ${foodCostPct.toFixed(0)}% (₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })} cost vs ₹${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })} revenue). Target should be 25-35%. Review recipe costs or pricing.`,
+            });
+          } else if (foodCostPct > 0) {
+            generatedInsights.push({
+              type: 'success',
+              message: `Healthy food cost ratio at ${foodCostPct.toFixed(0)}% (₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })} cost vs ₹${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })} revenue). Gross profit: ₹${(totalRevenue - totalCost).toLocaleString('en-IN', { maximumFractionDigits: 0 })}.`,
+            });
+          }
+        }
+      }
+
+      // 7. Branch comparison insight
       if (isAllBranches && branchStats.length > 1) {
         const top = branchStats[0];
         const bottom = branchStats[branchStats.length - 1];

@@ -52,6 +52,7 @@ export interface Database {
           whatsapp_template_preparing: string | null;
           whatsapp_template_ready: string | null;
           whatsapp_template_review: string | null;
+          whatsapp_template_out_for_delivery: string | null;
           google_review_link: string | null;
           created_at: string;
           updated_at: string;

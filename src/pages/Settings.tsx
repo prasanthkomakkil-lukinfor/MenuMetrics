@@ -30,6 +30,7 @@ export function Settings() {
     whatsapp_template_placed: 'Hi {customer}, your order #{order_id} has been placed at {restaurant}. We will notify you when it is being prepared.',
     whatsapp_template_preparing: 'Hi {customer}, your order #{order_id} is now being prepared by our kitchen team.',
     whatsapp_template_ready: 'Hi {customer}, your order #{order_id} is ready! Please collect it at your convenience.',
+    whatsapp_template_out_for_delivery: 'Hi {customer}, your order #{order_id} is out for delivery and will reach you shortly.',
     whatsapp_template_review: 'Hi {customer}, thank you for visiting {restaurant}! We would love to hear your feedback: {review_link}',
     google_review_link: '',
   });
@@ -58,6 +59,7 @@ export function Settings() {
         whatsapp_template_placed: business.whatsapp_template_placed ?? 'Hi {customer}, your order #{order_id} has been placed at {restaurant}. We will notify you when it is being prepared.',
         whatsapp_template_preparing: business.whatsapp_template_preparing ?? 'Hi {customer}, your order #{order_id} is now being prepared by our kitchen team.',
         whatsapp_template_ready: business.whatsapp_template_ready ?? 'Hi {customer}, your order #{order_id} is ready! Please collect it at your convenience.',
+        whatsapp_template_out_for_delivery: business.whatsapp_template_out_for_delivery ?? 'Hi {customer}, your order #{order_id} is out for delivery and will reach you shortly.',
         whatsapp_template_review: business.whatsapp_template_review ?? 'Hi {customer}, thank you for visiting {restaurant}! We would love to hear your feedback: {review_link}',
         google_review_link: business.google_review_link ?? '',
       });
@@ -105,6 +107,7 @@ export function Settings() {
           whatsapp_template_placed: whatsappData.whatsapp_template_placed || null,
           whatsapp_template_preparing: whatsappData.whatsapp_template_preparing || null,
           whatsapp_template_ready: whatsappData.whatsapp_template_ready || null,
+          whatsapp_template_out_for_delivery: whatsappData.whatsapp_template_out_for_delivery || null,
           whatsapp_template_review: whatsappData.whatsapp_template_review || null,
           google_review_link: whatsappData.google_review_link || null,
         } as never)
@@ -403,10 +406,19 @@ export function Settings() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ready / Out for Delivery</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Order Ready</label>
                     <textarea
                       value={whatsappData.whatsapp_template_ready}
                       onChange={(e) => setWhatsappData({ ...whatsappData, whatsapp_template_ready: e.target.value })}
+                      rows={2}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Out for Delivery</label>
+                    <textarea
+                      value={whatsappData.whatsapp_template_out_for_delivery}
+                      onChange={(e) => setWhatsappData({ ...whatsappData, whatsapp_template_out_for_delivery: e.target.value })}
                       rows={2}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
                     />
