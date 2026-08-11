@@ -86,8 +86,8 @@ export function Dashboard() {
 
       // Real channel breakdown
       const channelMap: Record<string, { amount: number; count: number }> = { dine_in: { amount: 0, count: 0 }, takeaway: { amount: 0, count: 0 }, delivery: { amount: 0, count: 0 } };
-      (bills || []).forEach((bill: { order?: { order_type?: string } | null; total_amount: string | number }) => {
-        const ot = bill.order?.order_type || 'dine_in';
+      (bills || []).forEach((bill: any) => {
+        const ot = (bill.order as any[])?.[0]?.order_type || (bill.order as any)?.order_type || 'dine_in';
         if (channelMap[ot]) {
           channelMap[ot].amount += Number(bill.total_amount);
           channelMap[ot].count += 1;
@@ -127,7 +127,7 @@ export function Dashboard() {
       const generatedInsights: Insight[] = [];
 
       // 1. Top selling item today
-      const orderIds = (bills || []).map((b: { order_id?: string }) => (b as { order_id?: string }).order_id).filter(Boolean) as string[];
+      const orderIds = (bills || []).map((b: any) => b.order_id).filter(Boolean) as string[];
       if (orderIds.length > 0) {
         const { data: orderItems } = await supabase
           .from('order_items')
@@ -135,8 +135,8 @@ export function Dashboard() {
           .in('order_id', orderIds);
         if (orderItems && orderItems.length > 0) {
           const itemMap = new Map<string, { qty: number; revenue: number }>();
-          orderItems.forEach((oi: { quantity: number; total_price: string | number; item?: { name: string | null } | null }) => {
-            const name = oi.item?.name || 'Unknown';
+          orderItems.forEach((oi: any) => {
+            const name = (oi.item as any[])?.[0]?.name || (oi.item as any)?.name || 'Unknown';
             const existing = itemMap.get(name) || { qty: 0, revenue: 0 };
             existing.qty += Number(oi.quantity);
             existing.revenue += Number(oi.total_price);

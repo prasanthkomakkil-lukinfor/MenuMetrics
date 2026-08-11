@@ -1,5 +1,5 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, ShoppingBag, Users, Package, FileText, Settings, LogOut, Menu, X, UtensilsCrossed, CreditCard, ChartBar as ChartBar, Gift, Calendar, Truck, Store, ChevronDown, Check } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, Package, FileText, Settings, LogOut, Menu, X, UtensilsCrossed, CreditCard, ChartBar as ChartBar, Gift, Calendar, Truck, Store, ChevronDown, Check, ChefHat } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
@@ -32,6 +32,7 @@ export function Layout({ children }: LayoutProps) {
     { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
     { icon: UtensilsCrossed, label: 'Orders', href: '/orders' },
     { icon: ShoppingBag, label: 'Menu', href: '/menu' },
+    { icon: ChefHat, label: 'Recipes', href: '/recipes' },
     { icon: Package, label: 'Inventory', href: '/inventory' },
     { icon: Truck, label: 'Purchasing', href: '/purchasing' },
     { icon: Users, label: 'Customers', href: '/customers' },
