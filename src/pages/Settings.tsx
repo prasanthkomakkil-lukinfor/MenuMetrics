@@ -8,6 +8,7 @@ export function Settings() {
   const { business } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState<'business' | 'tax' | 'whatsapp' | 'notifications'>('business');
   const [formData, setFormData] = useState({
     name: '',
     gst_number: '',
@@ -155,8 +156,35 @@ export function Settings() {
         <p className="text-gray-600">Manage your restaurant settings and preferences</p>
       </div>
 
+      <div className="flex gap-2 mb-6 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+        {[
+          { id: 'business' as const, label: 'Business', icon: Building2 },
+          { id: 'tax' as const, label: 'Tax & GST', icon: Receipt },
+          { id: 'whatsapp' as const, label: 'WhatsApp', icon: MessageCircle },
+          { id: 'notifications' as const, label: 'Notifications', icon: Bell },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
+          {/* Business tab */}
+          {activeTab === 'business' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex items-center gap-3 mb-6">
               <Building2 className="w-6 h-6 text-amber-500" />
@@ -231,7 +259,10 @@ export function Settings() {
               )}
             </form>
           </div>
+          )}
 
+          {/* Tax tab */}
+          {activeTab === 'tax' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex items-center gap-3 mb-6">
               <Receipt className="w-6 h-6 text-amber-500" />
@@ -320,8 +351,10 @@ export function Settings() {
               )}
             </form>
           </div>
+          )}
 
-          {/* WhatsApp Notifications */}
+          {/* WhatsApp tab */}
+          {activeTab === 'whatsapp' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex items-center gap-3 mb-2">
               <MessageCircle className="w-6 h-6 text-amber-500" />
@@ -462,7 +495,10 @@ export function Settings() {
               )}
             </form>
           </div>
+          )}
 
+          {/* Notifications tab */}
+          {activeTab === 'notifications' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center gap-3 mb-6">
               <Bell className="w-6 h-6 text-amber-500" />
@@ -488,6 +524,7 @@ export function Settings() {
               ))}
             </div>
           </div>
+          )}
         </div>
 
         <div className="lg:col-span-1">

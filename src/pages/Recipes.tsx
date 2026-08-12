@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChefHat, Plus, Trash2, X, Search, UtensilsCrossed, DollarSign, Clock, FileText } from 'lucide-react';
+import { ChefHat, Plus, Trash2, X, Search, UtensilsCrossed, DollarSign, Clock } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -26,6 +26,7 @@ export function Recipes() {
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [newIngredientId, setNewIngredientId] = useState('');
   const [newQuantity, setNewQuantity] = useState('');
+  const [newUnit, setNewUnit] = useState('kg');
   const [saving, setSaving] = useState(false);
 
   const businessIds = isAllBranches ? branches.map((b) => b.id) : business ? [business.id] : [];
@@ -111,11 +112,11 @@ export function Recipes() {
 
   const ensureRecipe = async (item: ItemWithRecipe): Promise<string> => {
     if (selectedItem?.recipe) return selectedItem.recipe.id;
-    if (!business) throw new Error('No business');
+    if (!item.business_id) throw new Error('No business for item');
     const { data, error } = await supabase
       .from('recipes')
       .insert({
-        business_id: business.id,
+        business_id: item.business_id,
         item_id: item.id,
         name: item.name,
         yield_quantity: 1,
@@ -140,6 +141,7 @@ export function Recipes() {
 
       const recipeId = await ensureRecipe(selectedItem);
       const qty = parseFloat(newQuantity);
+      const unit = newUnit || ingredient.unit || 'kg';
       const totalCost = qty * ingredient.cost_per_unit;
 
       const { data, error } = await supabase
@@ -148,7 +150,7 @@ export function Recipes() {
           recipe_id: recipeId,
           ingredient_name: ingredient.name,
           quantity: qty,
-          unit: ingredient.unit,
+          unit: unit,
           cost_per_unit: ingredient.cost_per_unit,
           total_cost: totalCost,
           ingredient_id: ingredient.id,
@@ -160,7 +162,7 @@ export function Recipes() {
 
       const updatedRecipe = selectedItem.recipe || {
         id: recipeId,
-        business_id: business!.id,
+        business_id: selectedItem.business_id,
         item_id: selectedItem.id,
         name: selectedItem.name,
         description: null,
@@ -189,6 +191,7 @@ export function Recipes() {
       setItems(items.map((i) => (i.id === updated.id ? updated : i)));
       setNewIngredientId('');
       setNewQuantity('');
+      setNewUnit('kg');
       setShowAddIngredient(false);
     } catch (error) {
       console.error('Error adding ingredient:', error);
@@ -390,11 +393,11 @@ export function Recipes() {
                   {availableIngredients.length === 0 ? (
                     <p className="text-sm text-gray-500">All ingredients already added. Add more ingredients in the Inventory page first.</p>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-3">
                       <select
                         value={newIngredientId}
                         onChange={(e) => setNewIngredientId(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
                       >
                         <option value="">Select ingredient...</option>
                         {availableIngredients.map((ing) => (
@@ -403,23 +406,46 @@ export function Recipes() {
                           </option>
                         ))}
                       </select>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Quantity"
-                          value={newQuantity}
-                          onChange={(e) => setNewQuantity(e.target.value)}
-                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
-                        />
-                        <button
-                          onClick={addIngredient}
-                          disabled={saving || !newIngredientId || !newQuantity}
-                          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-                        >
-                          Add
-                        </button>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div className="md:col-span-1">
+                          <label className="block text-xs text-gray-500 mb-1">Quantity</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Qty"
+                            value={newQuantity}
+                            onChange={(e) => setNewQuantity(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="block text-xs text-gray-500 mb-1">Unit</label>
+                          <select
+                            value={newUnit}
+                            onChange={(e) => setNewUnit(e.target.value)}
+                            className="w-full px-4 py-2 border border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                          >
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                            <option value="ml">ml</option>
+                            <option value="l">l</option>
+                            <option value="piece">piece</option>
+                            <option value="teaspoon">teaspoon</option>
+                            <option value="tablespoon">tablespoon</option>
+                            <option value="cup">cup</option>
+                            <option value="serving">serving</option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-1 flex items-end">
+                          <button
+                            onClick={addIngredient}
+                            disabled={saving || !newIngredientId || !newQuantity}
+                            className="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                          >
+                            Add
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -443,3 +469,6 @@ export function Recipes() {
     </Layout>
   );
 }
+
+
+export { Recipes }
